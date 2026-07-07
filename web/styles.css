@@ -290,7 +290,7 @@ pre code {
 }
 
 ul {
-  padding-left: 1.2rem;
+  padding-inline-start: 1.2rem;
 }
 
 li {
@@ -321,7 +321,7 @@ button:focus-visible {
 
 .skip-link {
   position: absolute;
-  left: 0.5rem;
+  inset-inline-start: 0.5rem;
   top: -3rem;
   background: var(--surface);
   color: var(--text);
@@ -363,7 +363,7 @@ button:focus-visible {
   color: var(--muted);
   font-weight: 400;
   font-size: 0.85em;
-  margin-left: 0.4em;
+  margin-inline-start: 0.4em;
 }
 
 .site-nav {
@@ -373,14 +373,16 @@ button:focus-visible {
   gap: 0.9rem;
 }
 
-.theme-picker {
+.theme-picker,
+.lang-picker {
   display: flex;
   align-items: center;
   gap: 0.4rem;
   font-size: 0.9rem;
 }
 
-.theme-picker label {
+.theme-picker label,
+.lang-picker label {
   color: var(--muted);
   white-space: nowrap;
 }
@@ -391,7 +393,8 @@ button:focus-visible {
   align-items: center;
 }
 
-#theme-select {
+#theme-select,
+#lang-select {
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
@@ -401,13 +404,16 @@ button:focus-visible {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 0.35rem 1.8rem 0.35rem 0.6rem;
+  padding-block: 0.35rem;
+  padding-inline-start: 0.6rem;
+  padding-inline-end: 1.8rem;
+  min-height: 44px;
   max-width: 40vw;
 }
 
 .select-caret {
   position: absolute;
-  right: 0.55rem;
+  inset-inline-end: 0.55rem;
   pointer-events: none;
   color: var(--muted);
   font-size: 0.8rem;
@@ -457,7 +463,17 @@ section {
 
 /* ---------------------------------------------------------------------
    Demo / terminal block
+   The demo output is literal CLI output, and install/usage snippets are
+   literal shell commands - neither is prose, so both stay LTR even when
+   the page (and everything around them) is RTL for ar/fa/he. index.html
+   sets dir="ltr" directly on .terminal and on each <pre>; this rule is a
+   defensive backup in case that attribute is ever dropped in an edit.
    --------------------------------------------------------------------- */
+
+.terminal,
+pre {
+  direction: ltr;
+}
 
 .terminal {
   border: 1px solid var(--border);
@@ -578,11 +594,13 @@ section {
    --------------------------------------------------------------------- */
 
 @media (min-width: 640px) {
-  .theme-picker {
+  .theme-picker,
+  .lang-picker {
     font-size: 0.95rem;
   }
 
-  #theme-select {
+  #theme-select,
+  #lang-select {
     max-width: none;
   }
 }
@@ -623,10 +641,11 @@ section {
 }
 
 /* Compact header at narrow widths (down to 360px): drop the visible
-   "Theme" label text, keep the aria-label on the select itself so the
-   control stays keyboard-accessible and announced correctly. */
+   "Theme"/"Language" label text, keep the aria-label on each select itself
+   so both controls stay keyboard-accessible and announced correctly. */
 @media (max-width: 420px) {
-  .theme-picker label {
+  .theme-picker label,
+  .lang-picker label {
     display: none;
   }
 

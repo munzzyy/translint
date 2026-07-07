@@ -1,5 +1,7 @@
 "use strict";
 
+import { t, initLocale, setLocale, getLocale } from "./i18n/index.js";
+
 (function () {
   var STORAGE_KEY = "translint-theme";
   var THEMES = [
@@ -62,3 +64,46 @@
     });
   }
 })();
+
+// ---------------------------------------------------------------------------
+// i18n: applies the active web/i18n/*.js catalog to every element carrying
+// data-i18n (textContent) or data-i18n-attr (one or more "attr:key" pairs,
+// comma-separated - e.g. data-i18n-attr="aria-label:lang.ariaLabel"). See
+// web/i18n/index.js for locale detection/loading and web/i18n/GLOSSARY.md
+// for translation rules. <html lang>/<html dir> and the RTL flip for
+// ar/fa/he are handled inside i18n/index.js itself, not here.
+// ---------------------------------------------------------------------------
+
+function applyTranslations() {
+  document.querySelectorAll("[data-i18n]").forEach(function (el) {
+    el.textContent = t(el.getAttribute("data-i18n"));
+  });
+  document.querySelectorAll("[data-i18n-attr]").forEach(function (el) {
+    el.getAttribute("data-i18n-attr")
+      .split(",")
+      .forEach(function (pair) {
+        var parts = pair.split(":");
+        if (parts.length !== 2) return;
+        el.setAttribute(parts[0].trim(), t(parts[1].trim()));
+      });
+  });
+}
+
+var langSelect = document.getElementById("lang-select");
+
+function syncLangSelect() {
+  if (langSelect) langSelect.value = getLocale();
+}
+
+initLocale({
+  onChange: function () {
+    applyTranslations();
+    syncLangSelect();
+  },
+});
+
+if (langSelect) {
+  langSelect.addEventListener("change", function () {
+    setLocale(langSelect.value, { onChange: applyTranslations });
+  });
+}
