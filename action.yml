@@ -33,13 +33,20 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
     - shell: bash
+      env:
+        TL_PATHS: ${{ inputs.paths }}
+        TL_BASE: ${{ inputs.base }}
+        TL_STRICT: ${{ inputs.strict }}
+        TL_FORMAT: ${{ inputs.format }}
+        TL_SCRIPT: ${{ github.action_path }}/translint.py
       run: |
         set -e
-        args=(--base "${{ inputs.base }}")
-        if [ "${{ inputs.strict }}" = "true" ]; then
+        args=(--base "$TL_BASE")
+        if [ "$TL_STRICT" = "true" ]; then
           args+=(--strict)
         fi
-        if [ -n "${{ inputs.format }}" ]; then
-          args+=(--format "${{ inputs.format }}")
+        if [ -n "$TL_FORMAT" ]; then
+          args+=(--format "$TL_FORMAT")
         fi
-        python "${{ github.action_path }}/translint.py" "${args[@]}" ${{ inputs.paths }}
+        # $TL_PATHS stays unquoted: the input is a space-separated list.
+        python "$TL_SCRIPT" "${args[@]}" $TL_PATHS
