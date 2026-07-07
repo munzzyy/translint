@@ -158,6 +158,20 @@ def test_parse_properties_handles_line_continuation():
     assert result["app.multi"] == "line one continues here"
 
 
+def test_parse_properties_continues_on_odd_trailing_backslashes():
+    # three trailing backslashes = one escaped backslash + the continuation marker
+    text = "app.multi=one\\\\\\\n    two\n"
+    result = translint.parse_properties(text, "x.properties")
+    assert result["app.multi"] == "one\\two"
+
+
+def test_parse_properties_stops_on_even_trailing_backslashes():
+    text = "app.solo=ends with backslash\\\\\napp.next=other\n"
+    result = translint.parse_properties(text, "x.properties")
+    assert result["app.solo"] == "ends with backslash\\"
+    assert result["app.next"] == "other"
+
+
 def test_parse_properties_handles_escaped_separator_in_key():
     text = r"app.colon\:escaped=value with = inside" + "\n"
     result = translint.parse_properties(text, "x.properties")

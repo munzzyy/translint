@@ -172,6 +172,14 @@ def parse_json(text, path):
     return flatten_json(data)
 
 
+def _properties_line_continues(line):
+    """True when `line` ends in an odd number of backslashes: the last one
+    is then unpaired, i.e. the java.util.Properties continuation marker.
+    An even count is just escaped literal backslashes, no continuation."""
+    trailing = len(line) - len(line.rstrip("\\"))
+    return trailing % 2 == 1
+
+
 def parse_properties(text, path):
     """Java .properties: key=value or key:value, one per logical line.
     A trailing unescaped backslash continues the value onto the next line
@@ -192,7 +200,7 @@ def parse_properties(text, path):
         # key and value must not be searched for inside an escaped
         # separator (\\= or \\:), and continuations can carry those too.
         full = line
-        while full.endswith("\\") and not full.endswith("\\\\"):
+        while _properties_line_continues(full):
             i += 1
             if i >= len(lines):
                 break
