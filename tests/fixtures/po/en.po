@@ -1,0 +1,24 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "app.title"
+msgstr "Welcome to Acme"
+
+msgid "app.greeting"
+msgstr "Hello %s, you have %d new messages"
+
+msgid "app.brand"
+msgstr "Acme"
+
+msgid "nav.home"
+msgstr "Home"
+
+msgid "nav.settings"
+msgstr "Settings"
+
+msgid "errors.notFound"
+msgstr "Page not found"
+
+msgid "errors.generic"
+msgstr "Something went wrong. Try again later."

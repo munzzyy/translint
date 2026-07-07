@@ -1,0 +1,45 @@
+name: translint
+description: Catch broken translations before they ship - missing keys, placeholder mismatches, empty and untranslated values.
+author: Cole Munz
+branding:
+  icon: globe
+  color: gray-dark
+
+inputs:
+  paths:
+    description: Directory of locale files, or specific files, space-separated (e.g. "locales/" or "locales/en.json locales/de.json").
+    required: true
+  base:
+    description: Locale name (filename stem) to treat as the reference.
+    required: false
+    default: "en"
+  strict:
+    description: Also fail on extra keys and untranslated-value heuristic hits, not just missing keys/placeholder mismatches/empty values.
+    required: false
+    default: "false"
+  format:
+    description: Force a format (json/po/properties) instead of detecting from extension.
+    required: false
+    default: ""
+  python-version:
+    description: Python version to run translint with.
+    required: false
+    default: "3.x"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+    - shell: bash
+      run: |
+        set -e
+        args=(--base "${{ inputs.base }}")
+        if [ "${{ inputs.strict }}" = "true" ]; then
+          args+=(--strict)
+        fi
+        if [ -n "${{ inputs.format }}" ]; then
+          args+=(--format "${{ inputs.format }}")
+        fi
+        python "${{ github.action_path }}/translint.py" "${args[@]}" ${{ inputs.paths }}

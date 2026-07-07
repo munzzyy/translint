@@ -1,0 +1,49 @@
+name: Bug report
+description: Something doesn't work right, including false positives/negatives in what translint flags.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: input
+    attributes:
+      label: Locale files
+      description: The base value and translated value (or a minimal snippet that still reproduces it) you ran translint on.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The exact command you ran.
+      placeholder: translint locales/ --base en --json
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+      description: What you expected to happen, or what should (not) have been flagged.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+      description: What actually happened. Paste the output.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: translint version
+      description: Output of `translint --version`.
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: OS / Python version
+      placeholder: e.g. Windows 11, Python 3.12
+    validations:
+      required: true

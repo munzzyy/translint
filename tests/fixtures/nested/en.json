@@ -1,0 +1,12 @@
+{
+  "welcome": {
+    "handlebars": "Hi {{userName}}, welcome back!",
+    "template": "Order #${orderId} shipped to $city"
+  },
+  "brand": {
+    "wordmark": "TransLint"
+  },
+  "pynamed": {
+    "summary": "%(user)s has %(count)d unread items"
+  }
+}

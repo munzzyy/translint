@@ -1,0 +1,24 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "app.title"
+msgstr "Bienvenido a Acme"
+
+msgid "app.greeting"
+msgstr "Hola %s, tienes %s mensajes nuevos"
+
+msgid "app.brand"
+msgstr "Acme"
+
+msgid "nav.home"
+msgstr "Inicio"
+
+msgid "errors.notFound"
+msgstr "Pagina no encontrada"
+
+msgid "errors.generic"
+msgstr ""
+
+msgid "nav.oldMenuKey"
+msgstr "leftover stale key"

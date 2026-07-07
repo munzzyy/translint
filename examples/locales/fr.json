@@ -1,0 +1,14 @@
+{
+  "nav": {
+    "home": "Accueil"
+  },
+  "checkout": {
+    "confirm": "Vous allez debiter {total} sur votre carte se terminant par {last4}",
+    "success": "Commande #{orderId} confirmee"
+  },
+  "errors": {
+    "networkDown": "Couldn't reach the server. Check your connection and try again."
+  },
+  "brand.name": "Acme",
+  "checkout.oldStep": "leftover from the old checkout flow"
+}

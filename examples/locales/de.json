@@ -1,0 +1,14 @@
+{
+  "nav": {
+    "home": "Startseite",
+    "settings": "Einstellungen"
+  },
+  "checkout": {
+    "confirm": "Wir belasten {amount} auf Ihre Karte, die auf {last4} endet",
+    "success": ""
+  },
+  "errors": {
+    "networkDown": "Der Server ist nicht erreichbar. Pruefen Sie Ihre Verbindung und versuchen Sie es erneut."
+  },
+  "brand.name": "Acme"
+}

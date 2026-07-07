@@ -1,0 +1,12 @@
+{
+  "welcome": {
+    "handlebars": "Hallo {{name}}, willkommen zurueck!",
+    "template": "Bestellung #${orderId} geliefert an $city"
+  },
+  "brand": {
+    "wordmark": "TransLint"
+  },
+  "pynamed": {
+    "summary": "%(user)s hat %(total)d ungelesene Eintraege"
+  }
+}

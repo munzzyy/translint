@@ -1,0 +1,14 @@
+{
+  "nav": {
+    "home": "Home",
+    "settings": "Settings"
+  },
+  "checkout": {
+    "confirm": "You're about to charge {amount} to your card ending in {last4}",
+    "success": "Order #{orderId} confirmed"
+  },
+  "errors": {
+    "networkDown": "Couldn't reach the server. Check your connection and try again."
+  },
+  "brand.name": "Acme"
+}

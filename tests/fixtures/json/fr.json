@@ -1,0 +1,16 @@
+{
+  "app": {
+    "title": "Bienvenue chez Acme",
+    "greeting": "Bonjour {name}, vous avez {total} nouveaux messages",
+    "brand": "Acme"
+  },
+  "nav": {
+    "home": "Accueil"
+  },
+  "errors": {
+    "notFound": "Page introuvable",
+    "generic": ""
+  },
+  "unit.kg": "kg",
+  "nav.legacyStale": "old key from a rename"
+}

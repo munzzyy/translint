@@ -1,0 +1,16 @@
+{
+  "app": {
+    "title": "Welcome to Acme",
+    "greeting": "Hallo {name}, du hast {count} neue Nachrichten",
+    "brand": "Acme"
+  },
+  "nav": {
+    "home": "Startseite",
+    "settings": "Einstellungen"
+  },
+  "errors": {
+    "notFound": "Seite nicht gefunden",
+    "generic": "Etwas ist schiefgelaufen. Versuche es spaeter erneut."
+  },
+  "unit.kg": "kg"
+}

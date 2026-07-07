@@ -1,0 +1,14 @@
+{
+  "name": "translint",
+  "owner": {
+    "name": "Munzzyy"
+  },
+  "description": "Catch broken translations before they ship: missing keys, placeholder mismatches, empty and untranslated values.",
+  "plugins": [
+    {
+      "name": "translint",
+      "source": "./",
+      "description": "Catch broken translations before they ship: missing keys, placeholder mismatches, empty and untranslated values. Stdlib Python, no network access."
+    }
+  ]
+}

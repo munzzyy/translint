@@ -1,0 +1,12 @@
+{
+  "name": "translint",
+  "description": "Catch broken translations before they ship: missing keys, placeholder mismatches, empty and untranslated values. Stdlib Python, no network access.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Munzzyy"
+  },
+  "homepage": "https://github.com/munzzyy/translint",
+  "repository": "https://github.com/munzzyy/translint",
+  "license": "Prosperity Public License 3.0.0",
+  "keywords": ["i18n", "l10n", "localization", "linter", "translation", "ci"]
+}

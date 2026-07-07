@@ -1,0 +1,26 @@
+name: Feature request
+description: A new placeholder style, format, or capability for the CLI.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's missing
+      description: What can't you do today, or what does translint miss?
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Example
+      description: If this is a new placeholder style or format, a real example locale file showing it (and, if you can, a case where it shouldn't fire).
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: How you'd expect this to work, if you have a preference. Not required.
+    validations:
+      required: false
