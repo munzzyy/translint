@@ -1,11 +1,13 @@
 # translint
 
 **A missing translation is a UI bug. A renamed placeholder is a crash.** translint checks
-a set of locale files against a base and flags exactly that: missing keys, stale extra
-keys, empty values, values that still look untranslated, and - the one that actually
-takes an app down - placeholder tokens that don't match between the base string and the
-translation. Ship `"You have {count} items"` translated as `"Tienes elementos"` and the
-first real user who hits that string gets a `KeyError`, not a UI bug.
+your locale files against a base and flags exactly that: missing keys, stale extra keys,
+empty values, values that still look untranslated, and the one that actually takes an app
+down — placeholder tokens that don't match between the base string and the translation.
+
+[![CI](https://github.com/munzzyy/translint/actions/workflows/ci.yml/badge.svg)](https://github.com/munzzyy/translint/actions/workflows/ci.yml)
+[![License: Prosperity 3.0.0](https://img.shields.io/badge/license-Prosperity--3.0.0-blue.svg)](LICENSE)
+![zero dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
 
 Three ways to run it: as a CLI you run by hand or in a pre-commit hook, as a GitHub Action
 that gates CI, or as a skill so your AI coding agent checks its own i18n changes before
