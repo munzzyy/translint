@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<script>(function(){try{var t=localStorage.getItem("translint-theme");if(t&&t!=="auto"){document.documentElement.setAttribute("data-theme",t);}}catch(e){}})();</script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-UUuM2ZSNSdtiSnzW5qJ3ihElI9cdhXeFoMg9I9qR7o0='; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'; manifest-src 'none'; worker-src 'none'" />
+<meta name="color-scheme" content="dark light" />
+<meta name="referrer" content="no-referrer" />
+<meta name="robots" content="index, follow" />
+<title>translint - a linter for your locale files</title>
+<meta name="description" content="translint is a zero-dependency CLI that checks locale files against a base and flags missing keys, placeholder mismatches, empty values, and untranslated strings. One Python file, standard library only." />
+<meta property="og:title" content="translint" />
+<meta property="og:description" content="A missing translation is a UI bug. A renamed placeholder is a crash. translint checks locale files for both, with zero dependencies." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://munzzyy.github.io/translint/" />
+<link rel="canonical" href="https://munzzyy.github.io/translint/" />
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<meta name="theme-color" content="#ffffff" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<header class="site-header">
+  <div class="wrap site-header__inner">
+    <p class="wordmark">translint<span class="wordmark__version">v0.1.0</span></p>
+    <nav class="site-nav" aria-label="Site">
+      <div class="theme-picker">
+        <label for="theme-select">Theme</label>
+        <div class="select-wrap">
+          <select id="theme-select" aria-label="Color theme">
+            <option value="auto">Auto (system)</option>
+            <option value="editor-dark">Editor Dark</option>
+            <option value="editor-light">Editor Light</option>
+            <option value="terminal-green">Terminal Green</option>
+            <option value="solarized-dark">Solarized Dark</option>
+            <option value="solarized-light">Solarized Light</option>
+            <option value="high-contrast">High Contrast</option>
+            <option value="gruvbox">Gruvbox</option>
+            <option value="nord">Nord</option>
+            <option value="monokai">Monokai</option>
+          </select>
+          <span class="select-caret" aria-hidden="true">&#9662;</span>
+        </div>
+      </div>
+      <a class="gh-link" href="https://github.com/munzzyy/translint" target="_blank" rel="noopener noreferrer">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="hero wrap" aria-labelledby="about-h">
+    <h1 id="about-h">translint</h1>
+    <p class="tagline">A missing translation is a UI bug. A renamed placeholder is a crash.</p>
+    <p>translint checks your locale files against a base file and flags exactly that: missing
+    keys, stale extra keys, empty values, values that still look untranslated, and placeholder
+    tokens that don't match between the base string and the translation - the one that actually
+    takes an app down. One Python file, standard library only, zero dependencies.</p>
+    <p>Run it as a CLI by hand or in a pre-commit hook, as a GitHub Action that gates CI, or as
+    an agent skill so Claude Code (or any agent using the open Agent Skills standard) checks its
+    own i18n changes before handing a PR back to you.</p>
+  </section>
+
+  <section class="wrap" id="install" aria-labelledby="install-h">
+    <h2 id="install-h">Install</h2>
+    <pre><code>pip install git+https://github.com/munzzyy/translint</code></pre>
+    <p>Or skip installing it, since it's one file with no dependencies:</p>
+    <pre><code>curl -LO https://raw.githubusercontent.com/munzzyy/translint/main/translint.py
+python translint.py --help</code></pre>
+  </section>
+
+  <section class="wrap" id="usage" aria-labelledby="usage-h">
+    <h2 id="usage-h">Usage</h2>
+    <pre><code>translint locales/                          # scan a directory, base=en
+translint locales/ --base fr                # use fr.json as the reference instead
+translint locales/en.json locales/de.json   # check specific files
+translint locales/ --json                   # machine-readable report
+translint locales/ --strict                 # also fail on extra keys + untranslated
+translint locales/ --allow-identical brand.name   # suppress one heuristic false positive</code></pre>
+    <p><code>--base</code> defaults to <code>en</code> - the locale name (filename stem) every
+    other discovered file gets checked against. Exit code is <code>0</code> when everything's
+    clean, <code>1</code> when translint found something to fix, <code>2</code> if a path
+    couldn't be read or parsed at all - a bad-JSON error and a real lint finding never look the
+    same to a script.</p>
+  </section>
+
+  <section class="wrap" id="demo" aria-labelledby="demo-h">
+    <h2 id="demo-h">See it catch something</h2>
+    <p>This is real output, not a mockup. <code>examples/locales/</code> in the repo ships one
+    base file (<code>en.json</code>) and two translations (<code>fr.json</code>,
+    <code>de.json</code>) with a handful of real, intentionally planted problems. Below is
+    translint run against them, copied verbatim - red categories fail the run by default, amber
+    ones are reported but only fail under <code>--strict</code>.</p>
+
+    <div class="terminal" role="group" aria-label="Terminal output from translint">
+      <p class="terminal__prompt"><span class="prompt-sign">$</span>translint examples/locales --base en</p>
+      <pre class="terminal__output"><code><span class="finding-locale">de (<span class="syn-str">examples\locales\de.json</span>):</span>
+<span class="finding-cat finding-cat--err">  empty values (1):</span>
+    - checkout.success
+<span class="finding-cat finding-cat--warn">  possibly untranslated (1, heuristic):</span>
+    - brand.name
+
+<span class="finding-locale">fr (<span class="syn-str">examples\locales\fr.json</span>):</span>
+<span class="finding-cat finding-cat--err">  missing keys (1):</span>
+    - nav.settings
+<span class="finding-cat finding-cat--warn">  extra keys (1):</span>
+    - checkout.oldStep
+<span class="finding-cat finding-cat--err">  placeholder mismatches (1):</span>
+    - checkout.confirm: base has ['<span class="syn-key">{amount}</span>', '<span class="syn-key">{last4}</span>'], locale has ['<span class="syn-key">{last4}</span>', '<span class="syn-key">{total}</span>']
+<span class="finding-cat finding-cat--warn">  possibly untranslated (2, heuristic):</span>
+    - brand.name
+    - errors.networkDown</code></pre>
+      <p class="terminal__prompt"><span class="prompt-sign">$</span>echo $?</p>
+      <pre class="terminal__output terminal__output--exit"><code><span class="exit-code">1</span></code></pre>
+    </div>
+    <p class="demo-note">translint exits 1 whenever there's something to fix. Exit <code>0</code>
+    means every locale is clean; exit <code>2</code> means a path couldn't even be read or
+    parsed. Try it yourself against these same files: <code>translint examples/locales --base en</code>.</p>
+  </section>
+
+  <section class="wrap" id="features" aria-labelledby="features-h">
+    <h2 id="features-h">What it checks</h2>
+    <ul class="feature-grid">
+      <li>
+        <h3>Missing keys</h3>
+        <p>A key that exists in the base locale but never made it into a translation.</p>
+      </li>
+      <li>
+        <h3>Placeholder mismatches</h3>
+        <p><code>{amount}</code> became <code>{total}</code> - the bug that renders fine in
+        every test that doesn't pass real interpolation data, and throws the moment one does.</p>
+      </li>
+      <li>
+        <h3>Empty values</h3>
+        <p>A key that exists but was never filled in.</p>
+      </li>
+      <li>
+        <h3>Extra keys</h3>
+        <p>Left over from a rename. Reported, but doesn't fail the run unless you pass
+        <code>--strict</code>.</p>
+      </li>
+      <li>
+        <h3>Possibly untranslated</h3>
+        <p>A heuristic: the value still reads byte-identical to the base after stripping
+        placeholders, punctuation, and numbers. Allowlist real matches with
+        <code>--allow-identical</code> or <code>--do-not-translate</code>.</p>
+      </li>
+      <li>
+        <h3>Three file formats</h3>
+        <p>JSON (nested or flat dot-namespaced keys), gettext <code>.po</code>/<code>.pot</code>,
+        and Java <code>.properties</code>, auto-detected by extension.</p>
+      </li>
+      <li>
+        <h3>Five placeholder styles</h3>
+        <p><code>{name}</code>, <code>{{name}}</code>, <code>%s</code>/<code>%d</code>/<code>%1$s</code>,
+        <code>%(name)s</code>, and <code>${name}</code>/<code>$name</code>, diffed as a multiset
+        so a doubled placeholder doesn't slip through.</p>
+      </li>
+      <li>
+        <h3>Scriptable output</h3>
+        <p><code>--json</code> prints machine-readable results. Exit codes are just as
+        script-friendly: 0 clean, 1 findings, 2 couldn't read or parse.</p>
+      </li>
+      <li>
+        <h3>Runs three ways</h3>
+        <p>CLI by hand or in a pre-commit hook, a GitHub Action that gates CI, or a Claude Code
+        / Agent Skills skill, so a coding agent checks its own i18n changes before handing back
+        a PR.</p>
+      </li>
+    </ul>
+  </section>
+
+  <section class="wrap" id="limits" aria-labelledby="limits-h">
+    <h2 id="limits-h">What it doesn't do</h2>
+    <ul class="limits-list">
+      <li>No YAML locale files. Parsing YAML safely needs a dependency, and translint is
+      stdlib-only on purpose.</li>
+      <li>The untranslated-value check is a heuristic, not a hard rule. It flags what looks
+      untranslated; it doesn't prove anything.</li>
+      <li>It doesn't translate anything, and it doesn't validate translation quality - just
+      structure: keys, placeholders, non-empty-ness.</li>
+      <li>Non-recursive directory scan. Point it at a directory and it checks the files
+      directly inside, not subdirectories.</li>
+    </ul>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p><a href="https://github.com/munzzyy/translint" target="_blank" rel="noopener noreferrer">github.com/munzzyy/translint</a></p>
+    <p class="muted">Prosperity Public License 3.0.0 - free for noncommercial use.</p>
+  </div>
+</footer>
+
+<script src="app.js" defer></script>
+</body>
+</html>

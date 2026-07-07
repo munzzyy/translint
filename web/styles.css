@@ -1,0 +1,640 @@
+/* translint site styles. Zero dependencies, no build step, no external
+   requests, no fonts - system font stacks only. Every theme below is
+   WCAG AA verified (text/UI contrast ratios computed, not eyeballed). */
+
+/* ---------------------------------------------------------------------
+   Reset + base
+   --------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+img,
+svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ---------------------------------------------------------------------
+   Theme tokens
+   Each theme defines: bg, surface, text, muted, accent, border, focus,
+   err, warn, ok, syn-key, syn-str.
+   Default (:root, no data-theme) = editor-light. A system dark
+   preference with no explicit choice resolves to editor-dark. Explicit
+   [data-theme] always wins over both.
+   --------------------------------------------------------------------- */
+
+:root,
+[data-theme="editor-light"] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #f3f3f3;
+  --text: #1e1e1e;
+  --muted: #5f5f5f;
+  --accent: #0857a6;
+  --border: #8a8a8a;
+  --focus: #0857a6;
+  --err: #b3261e;
+  --warn: #7a5900;
+  --ok: #146c2e;
+  --syn-key: #0451a5;
+  --syn-str: #8b3a02;
+}
+
+[data-theme="editor-dark"] {
+  color-scheme: dark;
+  --bg: #1e1e1e;
+  --surface: #252526;
+  --text: #d4d4d4;
+  --muted: #a6a6a6;
+  --accent: #4fc1ff;
+  --border: #707070;
+  --focus: #ffcc66;
+  --err: #f4726c;
+  --warn: #e2b93b;
+  --ok: #89d185;
+  --syn-key: #9cdcfe;
+  --syn-str: #ce9178;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --bg: #1e1e1e;
+    --surface: #252526;
+    --text: #d4d4d4;
+    --muted: #a6a6a6;
+    --accent: #4fc1ff;
+    --border: #707070;
+    --focus: #ffcc66;
+    --err: #f4726c;
+    --warn: #e2b93b;
+    --ok: #89d185;
+    --syn-key: #9cdcfe;
+    --syn-str: #ce9178;
+  }
+}
+
+[data-theme="terminal-green"] {
+  color-scheme: dark;
+  --bg: #001400;
+  --surface: #00220a;
+  --text: #4fff6a;
+  --muted: #3ecf59;
+  --accent: #c6ff6b;
+  --border: #358f4d;
+  --focus: #e8ff5e;
+  --err: #ff6b6b;
+  --warn: #ffcf49;
+  --ok: #7dff8f;
+  --syn-key: #b6ffb0;
+  --syn-str: #8fffc8;
+}
+
+[data-theme="solarized-dark"] {
+  color-scheme: dark;
+  --bg: #002b36;
+  --surface: #073642;
+  --text: #93a1a1;
+  --muted: #8ba2a3;
+  --accent: #5bb2e0;
+  --border: #5f858f;
+  --focus: #e0b93f;
+  --err: #ff6e67;
+  --warn: #e0b93f;
+  --ok: #a3c85a;
+  --syn-key: #5bb2e0;
+  --syn-str: #3fc4b6;
+}
+
+[data-theme="solarized-light"] {
+  color-scheme: light;
+  --bg: #fdf6e3;
+  --surface: #eee8d5;
+  --text: #4f656c;
+  --muted: #516568;
+  --accent: #1568b0;
+  --border: #8f7d58;
+  --focus: #ab6300;
+  --err: #ab2f27;
+  --warn: #7a5900;
+  --ok: #476000;
+  --syn-key: #1568b0;
+  --syn-str: #a4482f;
+}
+
+[data-theme="high-contrast"] {
+  color-scheme: dark;
+  --bg: #000000;
+  --surface: #0d0d0d;
+  --text: #ffffff;
+  --muted: #e6e6e6;
+  --accent: #ffff00;
+  --border: #ffffff;
+  --focus: #00ffff;
+  --err: #ff8080;
+  --warn: #ffd400;
+  --ok: #7dff7d;
+  --syn-key: #7fdbff;
+  --syn-str: #ffe17f;
+}
+
+[data-theme="gruvbox"] {
+  color-scheme: dark;
+  --bg: #282828;
+  --surface: #3c3836;
+  --text: #ebdbb2;
+  --muted: #bdae93;
+  --accent: #fe8019;
+  --border: #8a7f74;
+  --focus: #fabd2f;
+  --err: #fd8a76;
+  --warn: #fabd2f;
+  --ok: #b8bb26;
+  --syn-key: #8ec07c;
+  --syn-str: #b8bb26;
+}
+
+[data-theme="nord"] {
+  color-scheme: dark;
+  --bg: #2e3440;
+  --surface: #3b4252;
+  --text: #e5e9f0;
+  --muted: #b7c0d2;
+  --accent: #88c0d0;
+  --border: #7889a6;
+  --focus: #ebcb8b;
+  --err: #ee99a3;
+  --warn: #ebcb8b;
+  --ok: #a3be8c;
+  --syn-key: #9fbdda;
+  --syn-str: #a3be8c;
+}
+
+[data-theme="monokai"] {
+  color-scheme: dark;
+  --bg: #272822;
+  --surface: #33342c;
+  --text: #f8f8f2;
+  --muted: #b7b4a3;
+  --accent: #66d9ef;
+  --border: #7a7565;
+  --focus: #fd971f;
+  --err: #ff7a9b;
+  --warn: #e6db74;
+  --ok: #a6e22e;
+  --syn-key: #66d9ef;
+  --syn-str: #e6db74;
+}
+
+/* ---------------------------------------------------------------------
+   Global element styles
+   --------------------------------------------------------------------- */
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: clamp(0.95rem, 0.9rem + 0.25vw, 1.05rem);
+  line-height: 1.6;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+h1 {
+  font-size: clamp(1.8rem, 1.5rem + 1.6vw, 2.5rem);
+  margin: 0 0 0.5rem;
+}
+
+h2 {
+  font-size: clamp(1.3rem, 1.15rem + 0.8vw, 1.6rem);
+  margin: 0 0 0.9rem;
+  padding-top: 0.2rem;
+  border-top: 1px solid var(--border);
+}
+
+h3 {
+  font-size: clamp(1rem, 0.95rem + 0.2vw, 1.1rem);
+  margin: 0 0 0.35rem;
+}
+
+p {
+  margin: 0 0 1rem;
+  max-width: 68ch;
+}
+
+a {
+  color: var(--accent);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.15em;
+}
+
+a:hover {
+  text-decoration-thickness: 2.5px;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.92em;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1em 0.4em;
+}
+
+pre {
+  margin: 0 0 1rem;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+pre code {
+  display: block;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: 0.9rem 1rem;
+  font-size: clamp(0.78rem, 0.75rem + 0.15vw, 0.9rem);
+  line-height: 1.55;
+  white-space: pre;
+}
+
+ul {
+  padding-left: 1.2rem;
+}
+
+li {
+  margin-bottom: 0.4rem;
+}
+
+/* ---------------------------------------------------------------------
+   Focus visibility - every interactive element, every theme
+   --------------------------------------------------------------------- */
+
+a:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ---------------------------------------------------------------------
+   Layout
+   --------------------------------------------------------------------- */
+
+.wrap {
+  max-width: 880px;
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 4vw, 2rem);
+}
+
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -3rem;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.9rem;
+  border-radius: 6px;
+  z-index: 100;
+  transition: top 120ms ease;
+}
+
+.skip-link:focus {
+  top: 0.5rem;
+}
+
+.site-header {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.site-header__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-block: 0.75rem;
+}
+
+.wordmark {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.wordmark__version {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.85em;
+  margin-left: 0.4em;
+}
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.theme-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.theme-picker label {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+#theme-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem 1.8rem 0.35rem 0.6rem;
+  max-width: 40vw;
+}
+
+.select-caret {
+  position: absolute;
+  right: 0.55rem;
+  pointer-events: none;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.gh-link {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.site-footer {
+  border-top: 1px solid var(--border);
+  margin-top: 2rem;
+  padding-block: 1.5rem;
+}
+
+.site-footer p {
+  margin: 0 0 0.3rem;
+}
+
+/* ---------------------------------------------------------------------
+   Sections
+   --------------------------------------------------------------------- */
+
+main {
+  display: block;
+  padding-bottom: 1rem;
+}
+
+.hero {
+  padding-top: clamp(1.5rem, 4vw, 2.5rem);
+}
+
+.tagline {
+  font-size: clamp(1.05rem, 1rem + 0.3vw, 1.2rem);
+  color: var(--muted);
+  max-width: 60ch;
+}
+
+section {
+  padding-top: 1.75rem;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------------
+   Demo / terminal block
+   --------------------------------------------------------------------- */
+
+.terminal {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.terminal__prompt {
+  margin: 0;
+  padding: 0.6rem 1rem 0;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: clamp(0.8rem, 0.78rem + 0.15vw, 0.92rem);
+  color: var(--text);
+}
+
+.terminal__prompt .prompt-sign {
+  color: var(--accent);
+  font-weight: 700;
+  margin-right: 0.5em;
+}
+
+.terminal__output {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  max-height: 420px;
+  overflow: auto;
+  padding: 0.6rem 1rem 1rem;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: clamp(0.78rem, 0.75rem + 0.15vw, 0.9rem);
+  line-height: 1.6;
+  white-space: pre;
+}
+
+.terminal__output--exit {
+  max-height: none;
+  padding-top: 0;
+  font-weight: 700;
+}
+
+.finding-locale {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.finding-cat {
+  font-weight: 700;
+}
+
+.finding-cat--err {
+  color: var(--err);
+}
+
+.finding-cat--warn {
+  color: var(--warn);
+}
+
+.exit-code {
+  color: var(--err);
+}
+
+.syn-key {
+  color: var(--syn-key);
+}
+
+.syn-str {
+  color: var(--syn-str);
+}
+
+.demo-note {
+  margin-top: 0.9rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+/* ---------------------------------------------------------------------
+   Feature grid
+   --------------------------------------------------------------------- */
+
+.feature-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.1rem 1.5rem;
+}
+
+.feature-grid li {
+  margin: 0;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.feature-grid li:last-child {
+  border-bottom: 0;
+}
+
+.feature-grid p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.limits-list li {
+  color: var(--muted);
+}
+
+.limits-list li::marker {
+  color: var(--warn);
+}
+
+/* ---------------------------------------------------------------------
+   Responsive breakpoints
+   --------------------------------------------------------------------- */
+
+@media (min-width: 640px) {
+  .theme-picker {
+    font-size: 0.95rem;
+  }
+
+  #theme-select {
+    max-width: none;
+  }
+}
+
+@media (min-width: 768px) {
+  .feature-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* True grid now - the gap alone separates cards. A right-border divider
+     would need different nth-child math at every column count, so it's
+     simpler (and less fragile across breakpoints) to drop borders here
+     and rely on gap spacing instead. */
+  .feature-grid li {
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .feature-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .wrap {
+    max-width: 960px;
+  }
+}
+
+@media (min-width: 1440px) {
+  .wrap {
+    max-width: 1040px;
+  }
+
+  body {
+    font-size: clamp(1rem, 0.95rem + 0.1vw, 1.08rem);
+  }
+}
+
+/* Compact header at narrow widths (down to 360px): drop the visible
+   "Theme" label text, keep the aria-label on the select itself so the
+   control stays keyboard-accessible and announced correctly. */
+@media (max-width: 420px) {
+  .theme-picker label {
+    display: none;
+  }
+
+  .wordmark__version {
+    display: none;
+  }
+
+  .site-header__inner {
+    gap: 0.5rem;
+  }
+}
