@@ -9,9 +9,16 @@ down — placeholder tokens that don't match between the base string and the tra
 [![License: Prosperity 3.0.0](https://img.shields.io/badge/license-Prosperity--3.0.0-blue.svg)](LICENSE)
 ![zero dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
 
-Three ways to run it: as a CLI you run by hand or in a pre-commit hook, as a GitHub Action
-that gates CI, or as a skill so your AI coding agent checks its own i18n changes before
-handing them back to you. One Python file, standard library only, no dependencies.
+Four ways to run it: paste your locale files into the [browser demo](https://munzzyy.github.io/translint/),
+run the CLI by hand or in a pre-commit hook, gate CI with the GitHub Action, or install it as
+a skill so your AI coding agent checks its own i18n changes before handing them back to you.
+One Python file, standard library only, no dependencies.
+
+**[Try it in your browser](https://munzzyy.github.io/translint/).** Real output from the
+bundled example locale files, not a mockup - nine themes, works on a phone, nothing leaves
+your machine.
+
+[![translint's site: the base/translation example, real CLI output, and the theme picker in the header](docs/media/demo.png)](https://munzzyy.github.io/translint/)
 
 ## Example
 
@@ -199,7 +206,7 @@ into noise you've trained yourself to skim past.
 ```yaml
 repos:
   - repo: https://github.com/munzzyy/translint
-    rev: v0.1.0
+    rev: v0.2.0
     hooks:
       - id: translint
         args: [locales/, --base, en]
@@ -213,7 +220,7 @@ locale would make the comparison meaningless.
 ## As a GitHub Action
 
 ```yaml
-- uses: munzzyy/translint@v0.1.0
+- uses: munzzyy/translint@v0.2.0
   with:
     paths: locales/
     base: en
