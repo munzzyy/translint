@@ -529,6 +529,14 @@ def report(results, quiet=False):
 
 
 def main(argv=None):
+    # Locale files are full of text a legacy Windows code page can't encode -
+    # the report quotes their keys and values, so a ja/ar/th run on a cp1252
+    # console would otherwise die in UnicodeEncodeError mid-print. Emit UTF-8
+    # and degrade to replacement characters rather than crash.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
     ap = argparse.ArgumentParser(
         prog="translint",
         description="Check locale files for missing keys, placeholder mismatches, "
