@@ -18,7 +18,7 @@ export default {
   "hero.description1":
     "translint prüft deine Locale-Dateien gegen eine Basisdatei und meldet genau das: fehlende Schlüssel, übrig gebliebene Schlüssel, leere Werte, Werte, die noch unübersetzt aussehen, und Platzhalter, die zwischen dem Basisstring und der Übersetzung nicht übereinstimmen - der Bug, der eine App wirklich lahmlegt. Eine einzige Python-Datei, nur mit der Standardbibliothek, keine Abhängigkeiten.",
   "hero.description2":
-    "Nutze es als CLI von Hand oder in einem Pre-Commit-Hook, als GitHub Action, die die CI absichert, oder als Agent Skill, damit Claude Code (oder jeder Agent, der den offenen Agent-Skills-Standard nutzt) seine eigenen i18n-Änderungen prüft, bevor er dir einen PR übergibt.",
+    "Nutze es als CLI von Hand oder in einem Pre-Commit-Hook, als GitHub Action, die die CI absichert, oder als Agent Skill, damit Claude Code (oder jeder Agent, der den offenen Agent Skills-Standard nutzt) seine eigenen i18n-Änderungen prüft, bevor er dir einen PR übergibt.",
 
   "install.heading": "Installation",
   "install.altIntro": "Oder verzichte ganz auf die Installation, da es nur eine Datei ohne Abhängigkeiten ist:",
@@ -67,7 +67,7 @@ export default {
 
   "features.runsThreeWays.title": "Läuft auf drei Arten",
   "features.runsThreeWays.desc":
-    "Als CLI von Hand oder in einem Pre-Commit-Hook, als GitHub Action, die die CI absichert, oder als Claude-Code-/Agent-Skills-Skill, damit ein Coding-Agent seine eigenen i18n-Änderungen prüft, bevor er einen PR zurückgibt.",
+    "Als CLI von Hand oder in einem Pre-Commit-Hook, als GitHub Action, die die CI absichert, oder als Claude Code / Agent Skills-Skill, damit ein Coding-Agent seine eigenen i18n-Änderungen prüft, bevor er einen PR zurückgibt.",
 
   "limits.heading": "Was es nicht tut",
   "limits.noYaml": "Keine YAML-Locale-Dateien. YAML sicher zu parsen braucht eine Abhängigkeit, und translint ist absichtlich nur-stdlib.",
