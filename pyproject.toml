@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "translint"
-version = "0.2.0"
+version = "0.3.0"
 description = "Catch broken translations before they ship: missing keys, placeholder mismatches, empty and untranslated values."
 readme = "README.md"
 requires-python = ">=3.10"

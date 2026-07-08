@@ -16,7 +16,8 @@ One Python file, standard library only, no dependencies.
 
 **[Try it in your browser](https://munzzyy.github.io/translint/).** Real output from the
 bundled example locale files, not a mockup - nine themes, works on a phone, nothing leaves
-your machine.
+your machine. A linter for translations should practice what it lints, so the site itself
+reads in 32 languages, right-to-left included - pick yours from the header.
 
 [![translint's site: the base/translation example, real CLI output, and the theme picker in the header](docs/media/demo.png)](https://munzzyy.github.io/translint/)
 
@@ -206,7 +207,7 @@ into noise you've trained yourself to skim past.
 ```yaml
 repos:
   - repo: https://github.com/munzzyy/translint
-    rev: v0.2.0
+    rev: v0.3.0
     hooks:
       - id: translint
         args: [locales/, --base, en]
@@ -220,7 +221,7 @@ locale would make the comparison meaningless.
 ## As a GitHub Action
 
 ```yaml
-- uses: munzzyy/translint@v0.2.0
+- uses: munzzyy/translint@v0.3.0
   with:
     paths: locales/
     base: en
