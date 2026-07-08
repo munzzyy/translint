@@ -326,7 +326,7 @@ button:focus-visible {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
-  padding: 0.5rem 0.9rem;
+  padding: 0.65rem 0.9rem;
   border-radius: 6px;
   z-index: 100;
   transition: top 120ms ease;
@@ -399,7 +399,9 @@ button:focus-visible {
   -webkit-appearance: none;
   -moz-appearance: none;
   font: inherit;
-  font-size: 0.9rem;
+  /* 16px minimum - anything smaller makes iOS Safari zoom the whole page in
+     on focus, which then has to be manually zoomed back out. */
+  font-size: 1rem;
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--border);
@@ -422,6 +424,10 @@ button:focus-visible {
 .gh-link {
   font-weight: 600;
   white-space: nowrap;
+  /* Text alone here renders well under the 44px touch-target guideline;
+     the extra block padding grows the tappable box without changing the
+     visible text size or the row's horizontal rhythm. */
+  padding-block: 0.65rem;
 }
 
 .site-footer {
