@@ -1,0 +1,5 @@
+{
+  "allow_identical": [
+    "nav.ariaLabel"
+  ]
+}

@@ -12,8 +12,8 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.x"
       - run: pip install ruff
@@ -26,9 +26,28 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install pytest
       - run: python -m pytest tests/ -q
+
+  self-lint:
+    # The linter's own site has to pass the linter: extract the site's locale
+    # catalogs (web/i18n/*.js) to plain JSON, then run translint over the
+    # result the same way any other project would. See web/i18n/GLOSSARY.md
+    # for what's allowlisted in web/i18n/.translintrc.json and why.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "lts/*"
+      - run: node tools/extract_i18n.mjs "$RUNNER_TEMP/i18n-extract"
+      - run: >
+          python translint.py "$RUNNER_TEMP/i18n-extract" --base en --strict
+          --config web/i18n/.translintrc.json

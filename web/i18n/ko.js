@@ -59,7 +59,7 @@ export default {
 
   "features.placeholderStyles.title": "다섯 가지 플레이스홀더 스타일",
   "features.placeholderStyles.desc":
-    "{name}, {{name}}, %s/%d/%1$s, %(name)s, 그리고 ${name}/$name을 멀티셋으로 비교해서 중복된 플레이스홀더도 놓치지 않습니다.",
+    "{name}, {{name}}, %s/%d/%1$s, %(name)s, 그리고 ${name}/$name 을 멀티셋으로 비교해서 중복된 플레이스홀더도 놓치지 않습니다.",
 
   "features.scriptableOutput.title": "스크립트 가능한 출력",
   "features.scriptableOutput.desc":

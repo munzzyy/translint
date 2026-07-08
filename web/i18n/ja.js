@@ -59,7 +59,7 @@ export default {
 
   "features.placeholderStyles.title": "5つのプレースホルダー形式",
   "features.placeholderStyles.desc":
-    "{name}、{{name}}、%s/%d/%1$s、%(name)s、そして${name}/$nameを、多重集合として比較するので、重複したプレースホルダーも見逃しません。",
+    "{name}、{{name}}、%s/%d/%1$s、%(name)s、そして${name}/$name を、多重集合として比較するので、重複したプレースホルダーも見逃しません。",
 
   "features.scriptableOutput.title": "スクリプト対応の出力",
   "features.scriptableOutput.desc":

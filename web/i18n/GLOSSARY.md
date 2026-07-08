@@ -91,6 +91,27 @@ Notes on choices that aren't the most literal option:
   (`الإعدادات المحلية`, `العنصر النائب`) since Modern Standard Arabic tech vocabulary is more
   standardized around these than code-switched loanwords for a formal register.
 
+## Self-lint (translint on our own catalogs)
+
+CI extracts every catalog in this directory to JSON (`tools/extract_i18n.mjs`) and runs
+translint over the result on every push, `en.json` as the base - the linter's own site has
+to pass the linter. `.translintrc.json` in this directory is that run's config
+(`--config web/i18n/.translintrc.json`, since the scan target is the extracted tmpdir, not
+this directory - translint's own auto-discovery only looks in the directory it's scanning).
+
+Currently allowlisted, and why:
+
+- **`nav.ariaLabel`** (`allow_identical`) - the base value is "Site". `fr`, `nl`, `pt-BR`,
+  `ro`, and `tl` all keep it byte-identical, and correctly so: "site" is the plain, everyday
+  word for a website in each of those languages (not a stretch loanword, and not an
+  oversight - it's why five unrelated locales landed on the same spelling independently).
+  Same shape as this README's own `brand.name` example: a genuine cross-language cognate,
+  not a missed translation.
+
+If a future locale trips `nav.ariaLabel` for a real reason (they translated "Site" into
+something else, or a genuinely different value), that's fine - `allow_identical` just means
+this key is exempt from the *heuristic*, not that every locale must match it.
+
 ## Adding one more locale later
 
 1. Copy `web/i18n/en.js` to `web/i18n/<code>.js`. Translate every value; keep every key name

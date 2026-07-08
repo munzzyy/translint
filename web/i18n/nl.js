@@ -39,7 +39,7 @@ export default {
   "features.missingKeys.title": "Ontbrekende sleutels",
   "features.missingKeys.desc": "Een sleutel die in de basislocale bestaat maar nooit in een vertaling terecht is gekomen.",
 
-  "features.placeholderMismatches.title": "Placeholder-mismatches",
+  "features.placeholderMismatches.title": "Niet-overeenkomende placeholders",
   "features.placeholderMismatches.desc":
     "{amount} werd {total} - de bug die in elke test zonder echte interpolatiedata gewoon goed lijkt te gaan, en crasht zodra er wel een is.",
 
