@@ -77,8 +77,16 @@ EXT_TO_FORMAT = {
 _RX_DOUBLEBRACE = re.compile(r"\{\{\s*([\w.]+)\s*\}\}")
 _RX_BRACE = re.compile(r"\{([A-Za-z_][\w.]*|\d*)\}")
 _RX_PYNAMED = re.compile(r"%\((\w+)\)[sdifr%]")
-_RX_PRINTF = re.compile(r"%(\d+\$)?[sdifgeExXo]")
-_RX_DOLLAR = re.compile(r"\$\{(\w+)\}|\$(\w+)")
+# printf: optional %2$-style argument number, then the flag/width/precision
+# forms (%-10s, %05d, %.2f) real catalogs actually use. The space flag is
+# deliberately left out of the flag class: "% off" would otherwise read as
+# a "% o" token, and a space-flagged placeholder in a locale string is far
+# rarer than a percent sign followed by a word.
+_RX_PRINTF = re.compile(r"%(\d+\$)?[-+0#]*\d*(?:\.\d+)?[sdifgeExXo]")
+# Bare $name requires a letter/underscore start: "$5" is money, not a
+# placeholder, and currency reordering ("5 $" in French typography) must
+# not read as a placeholder mismatch.
+_RX_DOLLAR = re.compile(r"\$\{(\w+)\}|\$([A-Za-z_]\w*)")
 
 
 def _spans_contain(spans, m):
@@ -134,6 +142,19 @@ def extract_placeholders(value):
     return "+".join(styles_hit), tuple(sorted(tokens))
 
 
+_RX_PRINTF_ARGNUM = re.compile(r"^%\d+\$")
+
+
+def _strip_printf_argnums(tokens):
+    """Rewrite numbered printf tokens (%2$s) to their bare form (%s) and
+    return the result sorted. gettext explicitly allows a translation to
+    reorder a bare-form base's arguments by switching to the numbered form
+    (msgfmt -c accepts it), so %s/%d against %2$d/%1$s is the same argument
+    list spelled two ways. Comparing with the numbers stripped treats those
+    as equal while a changed or missing conversion still shows up."""
+    return sorted(_RX_PRINTF_ARGNUM.sub("%", t) for t in tokens)
+
+
 # ---------------------------------------------------------------------------
 # Format parsers. Each returns a flat dict of {dotted.key: string value},
 # already flattened for nested formats, plus the raw key order isn't
@@ -180,6 +201,25 @@ def _properties_line_continues(line):
     return trailing % 2 == 1
 
 
+_RX_PROPERTIES_ESCAPE = re.compile(r"\\(u[0-9a-fA-F]{4}|.)")
+_PROPERTIES_CONTROL_ESCAPES = {"t": "\t", "n": "\n", "r": "\r", "f": "\f"}
+
+
+def _properties_unescape(s):
+    """Decode java.util.Properties escapes the way Properties.load does:
+    \\uXXXX becomes its character (the native2ascii convention older Java
+    bundles still ship with - without this, é reads back as the literal
+    string u00e9), \\t/\\n/\\r/\\f become the control character, and any
+    other \\x becomes a literal x - which doubles as the quiet fallback
+    for a malformed \\u escape."""
+    def repl(m):
+        esc = m.group(1)
+        if len(esc) == 5 and esc[0] == "u":
+            return chr(int(esc[1:], 16))
+        return _PROPERTIES_CONTROL_ESCAPES.get(esc, esc)
+    return _RX_PROPERTIES_ESCAPE.sub(repl, s)
+
+
 def parse_properties(text, path):
     """Java .properties: key=value or key:value, one per logical line.
     A trailing unescaped backslash continues the value onto the next line
@@ -209,10 +249,8 @@ def parse_properties(text, path):
         if not m:
             i += 1
             continue
-        key = m.group(1).strip()
-        key = re.sub(r"\\(.)", r"\1", key)
-        value = m.group(2)
-        value = re.sub(r"\\(.)", r"\1", value)
+        key = _properties_unescape(m.group(1).strip())
+        value = _properties_unescape(m.group(2))
         out[key] = value
         i += 1
     return out
@@ -224,9 +262,16 @@ def parse_po(text, path):
     msgstr[0] as the value to check, since that's the form that corresponds
     to msgid the same way a singular translation would - msgstr[1..] are
     the plural variants and aren't compared against msgid directly. Entries
-    with an empty msgid (the .po header block) are skipped. Fuzzy/obsolete
-    (#~) entries are skipped since they aren't live translations."""
+    with an empty msgid (the .po header block) are skipped. Fuzzy (#, fuzzy)
+    and obsolete (#~) entries are skipped since they aren't live
+    translations - msgfmt doesn't compile either."""
     out = {}
+
+    def is_fuzzy_flag(line):
+        # "#," starts gettext's flag comment; fuzzy has to be one of the
+        # comma-separated flags there. The word "fuzzy" inside a translator
+        # comment (plain "#") or a flag like "c-format" must not match.
+        return line.startswith("#,") and "fuzzy" in [f.strip() for f in line[2:].split(",")]
 
     def unquote(raw):
         # .po string literals use C-style escapes inside double quotes;
@@ -251,6 +296,8 @@ def parse_po(text, path):
 
     for entry in entries:
         if any(line.startswith("#~") for line in entry):
+            continue
+        if any(is_fuzzy_flag(line) for line in entry):
             continue
         msgid_parts, msgstr_parts = [], []
         target = None
@@ -328,8 +375,9 @@ def load_locale(path, fmt=None):
 # prose to translate in the first place) doesn't get flagged at all - see
 # the ">= 3 letters of remaining content" guard in find_untranslated below.
 _STRIP_PLACEHOLDER_RX = re.compile(
-    r"\{\{[\w.]+\}\}|\{[\w.]*\}|%\(\w+\)[sdifr%]|%\d+\$[sdifgeExXo]|%[sdifgeExXo]|"
-    r"\$\{[\w]+\}|\$\w+"
+    r"\{\{[\w.]+\}\}|\{[\w.]*\}|%\(\w+\)[sdifr%]|"
+    r"%(?:\d+\$)?[-+0#]*\d*(?:\.\d+)?[sdifgeExXo]|"
+    r"\$\{[\w]+\}|\$[A-Za-z_]\w*"
 )
 _STRIP_PUNCT_RX = re.compile(r"[0-9%.,()/\-+×~\"'`:;!?\s]")
 
@@ -394,7 +442,8 @@ def check_locale(base, locale_dict, locale_name, path, fmt,
 
         _, base_tokens = extract_placeholders(base_val)
         _, loc_tokens = extract_placeholders(loc_val)
-        if sorted(base_tokens) != sorted(loc_tokens):
+        if (sorted(base_tokens) != sorted(loc_tokens)
+                and _strip_printf_argnums(base_tokens) != _strip_printf_argnums(loc_tokens)):
             placeholder_mismatches.append({
                 "key": key,
                 "base": sorted(base_tokens),

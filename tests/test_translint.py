@@ -104,6 +104,79 @@ def test_no_placeholders():
     assert tokens == ()
 
 
+def test_dollar_amount_is_not_a_placeholder():
+    # "$5" is money, not a $name template token - a plain price string must
+    # not register any placeholder at all, or every currency reorder in a
+    # translation ("5 $" in French/German typography) hard-fails CI
+    style, tokens = translint.extract_placeholders("Costs $5")
+    assert style == "none"
+    assert tokens == ()
+
+
+def test_dollar_name_with_trailing_digits_still_detected():
+    # narrowing $-detection to a letter/underscore start must not lose real
+    # identifiers that merely contain digits
+    style, tokens = translint.extract_placeholders("Hi $user2, see ${step3}")
+    assert style == "dollar"
+    assert tokens == ("$user2", "${step3}")
+
+
+def test_currency_reorder_is_not_a_mismatch():
+    base = {"price": "Costs $5"}
+    loc = {"price": "Coûte 5 $"}
+    r = translint.check_locale(base, loc, "fr", "fr.json", "json")
+    assert r["placeholder_mismatches"] == []
+
+
+def test_printf_width_precision_and_flag_forms():
+    # %.2f / %5d / %-10s are the printf forms that actually show up in real
+    # catalogs - dropping one in a translation is exactly the crash class
+    # translint exists to catch, so they must be extracted, not invisible
+    style, tokens = translint.extract_placeholders("Total: %.2f (%5d items, %-10s)")
+    assert style == "printf"
+    assert tokens == ("%-10s", "%.2f", "%5d")
+
+
+def test_printf_numbered_width_precision_forms():
+    style, tokens = translint.extract_placeholders("%1$-10s owes %2$.2f")
+    assert style == "printf"
+    assert tokens == ("%1$-10s", "%2$.2f")
+
+
+def test_printf_dropped_precision_token_is_a_mismatch():
+    base = {"total": "Total: %.2f"}
+    loc = {"total": "Insgesamt:"}
+    r = translint.check_locale(base, loc, "de", "de.json", "json")
+    assert r["placeholder_mismatches"] == [
+        {"key": "total", "base": ["%.2f"], "locale": []}
+    ]
+
+
+def test_printf_numbered_reorder_of_bare_base_is_not_a_mismatch():
+    # gettext explicitly blesses this: a bare-form msgid reordered with
+    # numbered arguments in the msgstr. msgfmt -c accepts it; so must we.
+    base = {"k": "%s received %d files"}
+    loc = {"k": "%2$d archivos recibió %1$s"}
+    r = translint.check_locale(base, loc, "es", "es.po", "po")
+    assert r["placeholder_mismatches"] == []
+
+
+def test_printf_numbered_reorder_with_wrong_conversions_still_flags():
+    # the bare/numbered equivalence is by conversion-char multiset - a
+    # numbered set with different conversions is still a real mismatch
+    base = {"k": "%s uploaded %d files"}
+    loc = {"k": "%1$s subió %2$s archivos"}
+    r = translint.check_locale(base, loc, "es", "es.po", "po")
+    assert len(r["placeholder_mismatches"]) == 1
+
+
+def test_printf_numbered_reorder_with_missing_token_still_flags():
+    base = {"k": "%s has %s"}
+    loc = {"k": "%1$s"}
+    r = translint.check_locale(base, loc, "es", "es.po", "po")
+    assert len(r["placeholder_mismatches"]) == 1
+
+
 def test_placeholder_multiset_order_independent():
     # {a}{b} and {b}{a} use the same placeholders, order shouldn't matter
     a = translint.extract_placeholders("{a} then {b}")[1]
@@ -178,6 +251,35 @@ def test_parse_properties_handles_escaped_separator_in_key():
     assert result["app.colon:escaped"] == "value with = inside"
 
 
+def test_parse_properties_decodes_unicode_escapes():
+    # native2ascii-era files are still everywhere: é must come back as
+    # the actual character, not the literal string "u00e9"
+    text = "app.greeting=caf\\u00e9 \\u00C9l\\u00e9gant\n"
+    result = translint.parse_properties(text, "x.properties")
+    assert result["app.greeting"] == "café Élégant"
+
+
+def test_parse_properties_decodes_unicode_escapes_in_keys():
+    text = "caf\\u00e9.label=value\n"
+    result = translint.parse_properties(text, "x.properties")
+    assert result == {"café.label": "value"}
+
+
+def test_parse_properties_decodes_whitespace_escapes():
+    # java.util.Properties turns \t \n \r \f into the real characters
+    text = "app.multi=line one\\nline two\\tend\n"
+    result = translint.parse_properties(text, "x.properties")
+    assert result["app.multi"] == "line one\nline two\tend"
+
+
+def test_parse_properties_invalid_unicode_escape_degrades_quietly():
+    # a malformed \uZZZZ shouldn't crash the parse; the backslash drops and
+    # the rest stays, same as any other unknown escape
+    text = "app.bad=\\uZZZZ\n"
+    result = translint.parse_properties(text, "x.properties")
+    assert result["app.bad"] == "uZZZZ"
+
+
 def test_parse_po_basic_pairs():
     text = (
         'msgid ""\n'
@@ -221,6 +323,41 @@ def test_parse_po_plural_uses_msgstr_zero():
 
 def test_parse_po_skips_obsolete_entries():
     text = '#~ msgid "app.gone"\n#~ msgstr "no longer used"\n'
+    result = translint.parse_po(text, "x.po")
+    assert result == {}
+
+
+def test_parse_po_skips_fuzzy_entries():
+    # msgfmt doesn't compile fuzzy entries, so they aren't live translations
+    # and must not be linted as if they were - the docstring has promised
+    # this all along
+    text = (
+        '#, fuzzy\n'
+        'msgid "app.title"\n'
+        'msgstr "old draft translation"\n'
+        "\n"
+        'msgid "app.kept"\n'
+        'msgstr "live translation"\n'
+    )
+    result = translint.parse_po(text, "x.po")
+    assert result == {"app.kept": "live translation"}
+
+
+def test_parse_po_fuzzy_skip_needs_the_flag_not_the_word():
+    # "#," is the flag comment; "fuzzy" inside a translator comment or a
+    # different flag list must not hide a live entry
+    text = (
+        '# this one felt fuzzy to write\n'
+        '#, c-format\n'
+        'msgid "app.title"\n'
+        'msgstr "Hello"\n'
+    )
+    result = translint.parse_po(text, "x.po")
+    assert result == {"app.title": "Hello"}
+
+
+def test_parse_po_fuzzy_flag_among_other_flags():
+    text = '#, c-format, fuzzy\nmsgid "app.title"\nmsgstr "draft"\n'
     result = translint.parse_po(text, "x.po")
     assert result == {}
 
