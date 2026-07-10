@@ -12,8 +12,8 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.x"
       - run: pip install ruff
@@ -26,12 +26,27 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install pytest
       - run: python -m pytest tests/ -q
+
+  versions:
+    # v0.2.0 shipped with 0.1.0 version strings because a bump commit never
+    # got staged, and plugin.json sat at 0.1.0 for two more releases. Fail
+    # the build the moment the four version strings stop agreeing.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - run: |
+          py="$(sed -n 's/^version = "\(.*\)"$/\1/p' pyproject.toml)"
+          mod="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' translint.py)"
+          plug="$(python3 -c 'import json; print(json.load(open(".claude-plugin/plugin.json"))["version"])')"
+          site="$(sed -n 's/.*wordmark__version">v\([0-9][0-9.]*\)<.*/\1/p' web/index.html)"
+          echo "pyproject=$py __version__=$mod plugin.json=$plug wordmark=$site"
+          test -n "$py" && test "$py" = "$mod" && test "$py" = "$plug" && test "$py" = "$site"
 
   self-lint:
     # The linter's own site has to pass the linter: extract the site's locale
@@ -40,11 +55,11 @@ jobs:
     # for what's allowlisted in web/i18n/.translintrc.json and why.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.x"
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "lts/*"
       - run: node tools/extract_i18n.mjs "$RUNNER_TEMP/i18n-extract"
