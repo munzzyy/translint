@@ -533,7 +533,7 @@ def find_base(files, base_name):
     return None
 
 
-def report(results, quiet=False):
+def report(results):
     lines = []
     any_issues = False
     for r in results:
@@ -688,16 +688,14 @@ def main(argv=None):
 
     if args.json:
         print(json.dumps(results, indent=2))
-    else:
-        text = report(results, quiet=args.quiet)
-        if args.quiet:
-            failing = [r["locale"] for r in results if is_failing(r, strict=args.strict)]
-            if failing:
-                print(f"translint: issues in {', '.join(failing)}")
-            else:
-                print("translint: all locales clean")
+    elif args.quiet:
+        failing = [r["locale"] for r in results if is_failing(r, strict=args.strict)]
+        if failing:
+            print(f"translint: issues in {', '.join(failing)}")
         else:
-            sys.stdout.write(text)
+            print("translint: all locales clean")
+    else:
+        sys.stdout.write(report(results))
 
     return 1 if any(is_failing(r, strict=args.strict) for r in results) else 0
 
