@@ -205,7 +205,7 @@ into noise you've trained yourself to skim past.
 ```yaml
 repos:
   - repo: https://github.com/munzzyy/translint
-    rev: v0.3.0
+    rev: v0.4.0
     hooks:
       - id: translint
         args: [locales/, --base, en]
@@ -219,7 +219,7 @@ locale would make the comparison meaningless.
 ## As a GitHub Action
 
 ```yaml
-- uses: munzzyy/translint@v0.3.0
+- uses: munzzyy/translint@v0.4.0
   with:
     paths: locales/
     base: en

@@ -31,7 +31,7 @@ import os
 import re
 import sys
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 # check_locale()'s return dict is translint's only machine-readable contract.
 # If you add, rename, or remove a top-level key, update this set and bump
