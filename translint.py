@@ -155,6 +155,39 @@ def _strip_printf_argnums(tokens):
     return sorted(_RX_PRINTF_ARGNUM.sub("%", t) for t in tokens)
 
 
+def _bare_printf_conversions(value):
+    """Ordered list of BARE (unnumbered) printf conversion characters in
+    value, left to right - "%s got %d" -> ['s', 'd']. Numbered tokens
+    (%1$s) are excluded: their position is pinned by the number rather
+    than by where they sit in the string, so reordering those is safe (see
+    _strip_printf_argnums) in a way reordering bare conversions is not -
+    "%s %d" applied to a (name, age) tuple crashes if a translation flips
+    it to "%d %s" without also flipping the values, even though {%s, %d}
+    is the same multiset either way."""
+    out = []
+    for m in _RX_PRINTF.finditer(value):
+        token = m.group(0)
+        if not _RX_PRINTF_ARGNUM.match(token):
+            out.append(token[-1])
+    return out
+
+
+def _placeholder_mismatch(base_val, base_tokens, loc_val, loc_tokens):
+    """True if the translation's placeholders don't actually match the
+    base's. Two distinct ways that happens:
+      - a different token multiset (missing/extra/wrong-numbered
+        placeholder), checked ignoring order and, for printf, ignoring
+        %N$ argument numbers;
+      - the SAME multiset of bare printf conversions in a different
+        order (%s/%d swapped to %d/%s) - invisible to the multiset check
+        above, but a real runtime crash once the translation is formatted
+        against the base's argument tuple.
+    """
+    if sorted(base_tokens) != sorted(loc_tokens):
+        return _strip_printf_argnums(base_tokens) != _strip_printf_argnums(loc_tokens)
+    return _bare_printf_conversions(base_val) != _bare_printf_conversions(loc_val)
+
+
 # ---------------------------------------------------------------------------
 # Format parsers. Each returns a flat dict of {dotted.key: string value},
 # already flattened for nested formats, plus the raw key order isn't
@@ -221,11 +254,13 @@ def _properties_unescape(s):
 
 
 def parse_properties(text, path):
-    """Java .properties: key=value or key:value, one per logical line.
-    A trailing unescaped backslash continues the value onto the next line
-    (the standard .properties continuation rule). '#' and '!' start a
-    comment when they're the first non-whitespace character on a line.
-    Leading whitespace on a continuation line is stripped, matching how
+    """Java .properties: key=value, key:value, or key value (bare
+    whitespace, no punctuation at all - java.util.Properties.load()
+    accepts this too), one per logical line. A trailing unescaped
+    backslash continues the value onto the next line (the standard
+    .properties continuation rule). '#' and '!' start a comment when
+    they're the first non-whitespace character on a line. Leading
+    whitespace on a continuation line is stripped, matching how
     java.util.Properties reads it."""
     out = {}
     lines = text.splitlines()
@@ -245,7 +280,12 @@ def parse_properties(text, path):
             if i >= len(lines):
                 break
             full = full[:-1] + lines[i].lstrip()
-        m = re.match(r"\s*((?:[^\\=: \t]|\\.)+)\s*[=:]\s*(.*)$", full)
+        # separator is =/: (optionally whitespace-padded) if one is present,
+        # else a bare run of whitespace - "key value" is as valid as
+        # "key=value". Try the =/: form first so a value that itself starts
+        # with a word character right after whitespace-padded punctuation
+        # (e.g. "key = value") isn't mis-split on the whitespace alone.
+        m = re.match(r"\s*((?:[^\\=: \t]|\\.)+)(?:\s*[=:]\s*|[ \t]+)(.*)$", full)
         if not m:
             i += 1
             continue
@@ -264,7 +304,12 @@ def parse_po(text, path):
     the plural variants and aren't compared against msgid directly. Entries
     with an empty msgid (the .po header block) are skipped. Fuzzy (#, fuzzy)
     and obsolete (#~) entries are skipped since they aren't live
-    translations - msgfmt doesn't compile either."""
+    translations - msgfmt doesn't compile either.
+
+    An entry carrying msgctxt is keyed by (msgctxt, msgid) instead of the
+    bare msgid, so two context-disambiguated entries sharing one msgid
+    (a "Close" verb vs a "Close" adjective) don't collide - without this,
+    the second parsed entry silently overwrites the first."""
     out = {}
 
     def is_fuzzy_flag(line):
@@ -299,13 +344,20 @@ def parse_po(text, path):
             continue
         if any(is_fuzzy_flag(line) for line in entry):
             continue
-        msgid_parts, msgstr_parts = [], []
+        msgid_parts, msgstr_parts, msgctxt_parts = [], [], []
         target = None
         for line in entry:
             if line.startswith("#"):
                 continue
             if line.startswith("msgid_plural"):
                 target = None
+                continue
+            if line.startswith("msgctxt "):
+                target = msgctxt_parts
+                msgctxt_parts.append(line[len("msgctxt "):].strip())
+                continue
+            if line.startswith("msgctxt"):
+                target = msgctxt_parts
                 continue
             if line.startswith("msgid "):
                 target = msgid_parts
@@ -333,9 +385,11 @@ def parse_po(text, path):
                 target.append(line)
         msgid = "".join(unquote(p) for p in msgid_parts)
         msgstr = "".join(unquote(p) for p in msgstr_parts)
+        msgctxt = "".join(unquote(p) for p in msgctxt_parts)
         if msgid == "":
             continue  # header block
-        out[msgid] = msgstr
+        key = (msgctxt, msgid) if msgctxt else msgid
+        out[key] = msgstr
     return out
 
 
@@ -400,6 +454,16 @@ def _letter_count(s):
 # ---------------------------------------------------------------------------
 
 
+def _key_sort(key):
+    """Sort key for a locale dict key, which is a bare msgid string for
+    every format except .po entries that used msgctxt, where parse_po
+    keys by a (msgctxt, msgid) tuple instead (see parse_po). A single .po
+    file commonly has both shapes at once - msgctxt only on the handful of
+    entries that need disambiguating - and Python refuses to compare a
+    str to a tuple directly, so plain keys are wrapped to a 1-tuple here."""
+    return key if isinstance(key, tuple) else (key,)
+
+
 def check_locale(base, locale_dict, locale_name, path, fmt,
                   do_not_translate=None, allow_identical=None):
     """Compare one locale's flat {key: value} dict against the base's.
@@ -421,14 +485,14 @@ def check_locale(base, locale_dict, locale_name, path, fmt,
     base_keys = set(base.keys())
     locale_keys = set(locale_dict.keys())
 
-    missing_keys = sorted(base_keys - locale_keys)
-    extra_keys = sorted(locale_keys - base_keys)
+    missing_keys = sorted(base_keys - locale_keys, key=_key_sort)
+    extra_keys = sorted(locale_keys - base_keys, key=_key_sort)
 
     placeholder_mismatches = []
     empty_values = []
     untranslated_values = []
 
-    for key in sorted(base_keys & locale_keys):
+    for key in sorted(base_keys & locale_keys, key=_key_sort):
         base_val = base[key]
         loc_val = locale_dict[key]
 
@@ -442,8 +506,7 @@ def check_locale(base, locale_dict, locale_name, path, fmt,
 
         _, base_tokens = extract_placeholders(base_val)
         _, loc_tokens = extract_placeholders(loc_val)
-        if (sorted(base_tokens) != sorted(loc_tokens)
-                and _strip_printf_argnums(base_tokens) != _strip_printf_argnums(loc_tokens)):
+        if _placeholder_mismatch(base_val, base_tokens, loc_val, loc_tokens):
             placeholder_mismatches.append({
                 "key": key,
                 "base": sorted(base_tokens),

@@ -177,6 +177,27 @@ def test_printf_numbered_reorder_with_missing_token_still_flags():
     assert len(r["placeholder_mismatches"]) == 1
 
 
+def test_bare_printf_reorder_with_type_change_is_a_mismatch():
+    # base uses %s then %d; the translation swaps the order without also
+    # swapping which value goes where - same multiset ({%s, %d}) so the
+    # sorted-tuple comparison alone sees no mismatch, but base's (name, age)
+    # tuple applied to the reordered string is a real TypeError at runtime,
+    # unlike a numbered reorder (%2$d ... %1$s), which is explicitly safe
+    base = {"k": "Hi %s, you are %d years old"}
+    loc = {"k": "Tem %d anos, %s"}
+    r = translint.check_locale(base, loc, "pt", "pt.po", "po")
+    assert len(r["placeholder_mismatches"]) == 1
+
+
+def test_bare_printf_same_order_is_not_a_mismatch():
+    # the safe counterpart to the reorder case above - identical bare
+    # conversions in the same order must stay clean
+    base = {"k": "Hi %s, you are %d years old"}
+    loc = {"k": "Olá %s, você tem %d anos"}
+    r = translint.check_locale(base, loc, "pt", "pt.po", "po")
+    assert r["placeholder_mismatches"] == []
+
+
 def test_placeholder_multiset_order_independent():
     # {a}{b} and {b}{a} use the same placeholders, order shouldn't matter
     a = translint.extract_placeholders("{a} then {b}")[1]
@@ -223,6 +244,23 @@ def test_parse_properties_handles_comments_and_separators():
     )
     result = translint.parse_properties(text, "x.properties")
     assert result == {"app.title": "Hello World", "app.greeting": "Hi there"}
+
+
+def test_parse_properties_accepts_whitespace_only_separator():
+    # java.util.Properties.load() allows a bare-whitespace separator with
+    # no = or : at all - "key value" is just as valid as "key=value" and
+    # must not be silently dropped
+    text = "greeting Hello there\nfarewell=Goodbye\n"
+    result = translint.parse_properties(text, "x.properties")
+    assert result == {"greeting": "Hello there", "farewell": "Goodbye"}
+
+
+def test_parse_properties_whitespace_separator_does_not_affect_equals_values():
+    # a value with internal spaces after a real = separator must still be
+    # taken whole - the new bare-whitespace branch must not eat into it
+    text = "app.title=Hello there World\n"
+    result = translint.parse_properties(text, "x.properties")
+    assert result["app.title"] == "Hello there World"
 
 
 def test_parse_properties_handles_line_continuation():
@@ -319,6 +357,42 @@ def test_parse_po_plural_uses_msgstr_zero():
     )
     result = translint.parse_po(text, "x.po")
     assert result == {"app.plural": "one item"}
+
+
+def test_parse_po_msgctxt_disambiguates_same_msgid():
+    # "Close" the verb and "Close" the adjective need different French
+    # translations - without msgctxt in the key, the second entry silently
+    # overwrites the first and "Fermer" vanishes from every check
+    text = (
+        'msgctxt "verb"\n'
+        'msgid "Close"\n'
+        'msgstr "Fermer"\n'
+        "\n"
+        'msgctxt "adjective"\n'
+        'msgid "Close"\n'
+        'msgstr "Proche"\n'
+    )
+    result = translint.parse_po(text, "x.po")
+    assert result == {("verb", "Close"): "Fermer", ("adjective", "Close"): "Proche"}
+
+
+def test_parse_po_without_msgctxt_still_keys_by_bare_msgid():
+    # the overwhelmingly common case - no msgctxt anywhere - must keep
+    # working exactly as before, plain string keys and all
+    text = 'msgid "app.title"\nmsgstr "Hello World"\n'
+    result = translint.parse_po(text, "x.po")
+    assert result == {"app.title": "Hello World"}
+
+
+def test_check_locale_handles_mixed_msgctxt_and_plain_keys():
+    # real .po files mix untouched entries (bare msgid key) with the rare
+    # msgctxt-disambiguated pair - check_locale's key sorting has to
+    # tolerate str and tuple keys together, not just an all-one-shape dict
+    base = {"plain": "Hello", ("verb", "Close"): "Close", ("adjective", "Close"): "Closed"}
+    loc = {"plain": "Bonjour", ("verb", "Close"): "Fermer", ("adjective", "Close"): "Proche"}
+    r = translint.check_locale(base, loc, "fr", "fr.po", "po")
+    assert r["ok"] is True
+    assert r["missing_keys"] == []
 
 
 def test_parse_po_skips_obsolete_entries():
