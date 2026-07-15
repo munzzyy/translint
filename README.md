@@ -9,6 +9,8 @@ down — placeholder tokens that don't match between the base string and the tra
 [![License: Prosperity 3.0.0](https://img.shields.io/badge/license-Prosperity--3.0.0-blue.svg)](LICENSE)
 ![zero dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
 
+![translint catching a missing key and a placeholder rename in a German locale file, plus a missing key, a stale extra key, and another placeholder mismatch in a French one](docs/media/demo.svg)
+
 Four ways to use it: see it run in the [browser demo](https://munzzyy.github.io/translint/),
 run the CLI by hand or in a pre-commit hook, gate CI with the GitHub Action, or install it as
 a skill so your AI coding agent checks its own i18n changes before handing them back to you.

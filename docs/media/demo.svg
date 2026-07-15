@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="478" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="14">
+<rect width="840" height="478" rx="8" fill="#0d1117"/>
+<rect width="840" height="30" rx="8" fill="#161b22"/>
+<rect y="22" width="840" height="8" fill="#161b22"/>
+<circle cx="18" cy="15" r="5.5" fill="#ff5f57"/>
+<circle cx="38" cy="15" r="5.5" fill="#febc2e"/>
+<circle cx="58" cy="15" r="5.5" fill="#28c840"/>
+<text x="420" y="19" text-anchor="middle" fill="#8b949e" font-size="12">translint translint-demo --base en</text>
+<text x="16.0" y="44" fill="#98c379" font-weight="normal" xml:space="preserve">$</text>
+<text x="24.4" y="44" fill="#abb2bf" font-weight="normal" xml:space="preserve"> translint translint-demo --base en</text>
+<text x="16.0" y="82" fill="#abb2bf" font-weight="normal" xml:space="preserve">de (translint-demo/de.json):</text>
+<text x="16.0" y="101" fill="#abb2bf" font-weight="normal" xml:space="preserve">  missing keys (1):</text>
+<text x="16.0" y="120" fill="#abb2bf" font-weight="normal" xml:space="preserve">    - errors.networkDown</text>
+<text x="16.0" y="139" fill="#abb2bf" font-weight="normal" xml:space="preserve">  placeholder mismatches (1):</text>
+<text x="16.0" y="158" fill="#abb2bf" font-weight="normal" xml:space="preserve">    - checkout.confirm: base has [&#x27;{amount}&#x27;, &#x27;{last4}&#x27;], locale has [&#x27;{amount}&#x27;, &#x27;{last}&#x27;]</text>
+<text x="16.0" y="177" fill="#abb2bf" font-weight="normal" xml:space="preserve">  empty values (1):</text>
+<text x="16.0" y="196" fill="#abb2bf" font-weight="normal" xml:space="preserve">    - checkout.success</text>
+<text x="16.0" y="215" fill="#abb2bf" font-weight="normal" xml:space="preserve">  possibly untranslated (1, heuristic):</text>
+<text x="16.0" y="234" fill="#abb2bf" font-weight="normal" xml:space="preserve">    - brand.name</text>
+<text x="16.0" y="272" fill="#abb2bf" font-weight="normal" xml:space="preserve">fr (translint-demo/fr.json):</text>
+<text x="16.0" y="291" fill="#abb2bf" font-weight="normal" xml:space="preserve">  missing keys (1):</text>
+<text x="16.0" y="310" fill="#abb2bf" font-weight="normal" xml:space="preserve">    - nav.settings</text>
+<text x="16.0" y="329" fill="#abb2bf" font-weight="normal" xml:space="preserve">  extra keys (1):</text>
+<text x="16.0" y="348" fill="#abb2bf" font-weight="normal" xml:space="preserve">    - checkout.oldStep</text>
+<text x="16.0" y="367" fill="#abb2bf" font-weight="normal" xml:space="preserve">  placeholder mismatches (1):</text>
+<text x="16.0" y="386" fill="#abb2bf" font-weight="normal" xml:space="preserve">    - checkout.confirm: base has [&#x27;{amount}&#x27;, &#x27;{last4}&#x27;], locale has [&#x27;{last4}&#x27;, &#x27;{total}&#x27;]</text>
+<text x="16.0" y="405" fill="#abb2bf" font-weight="normal" xml:space="preserve">  possibly untranslated (2, heuristic):</text>
+<text x="16.0" y="424" fill="#abb2bf" font-weight="normal" xml:space="preserve">    - brand.name</text>
+<text x="16.0" y="443" fill="#abb2bf" font-weight="normal" xml:space="preserve">    - errors.networkDown</text>
+</svg>
