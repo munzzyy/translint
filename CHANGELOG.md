@@ -4,6 +4,18 @@ The same notes ship as [GitHub releases](https://github.com/munzzyy/translint/re
 
 ## v0.4.0 (unreleased)
 
+`--fix` - scoped narrowly on purpose. It inserts a key that's entirely missing
+from a locale file, tagged with an unmissable `[UNTRANSLATED]` marker (`.po`
+gets its own `fuzzy` flag instead, which `parse_po` already treats as not a
+live translation, so a fixed key still reads back as missing until someone
+actually translates it). It never writes real translated text, never touches
+a key that already exists - not a placeholder mismatch, not an empty value,
+and never the identical-to-base heuristic, which stays report-only forever -
+and never reformats a file: new keys are appended, so the diff a fix produces
+is exactly the new key(s) and nothing else. `--fix --dry-run` previews what
+would land without writing. Default behavior (report-only, no writes) is
+unchanged; `--fix` is opt-in.
+
 Placeholder-engine correctness release. CONTRIBUTING.md calls placeholder false
 positives the worst bug class this tool can have; an audit found five in the
 flagship check, and all five are fixed here, each with its failing test written

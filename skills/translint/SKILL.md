@@ -68,13 +68,25 @@ you want to keep them that way.
 
 ## The rule
 
-translint flags what's broken, it doesn't fix it. When it reports a missing key, add the
-translation - don't invent a placeholder-value pair that merely makes the check pass. When
-it reports a placeholder mismatch, look at what the base string actually interpolates and
-fix the translation to match, not the other way around (the base is the source of truth).
-When it reports something you're confident is a false positive on the untranslated-value
-heuristic, use `--allow-identical`/`--do-not-translate` rather than ignoring the finding -
-that keeps the check meaningful for the next change instead of training yourself to skim
-past it.
+translint flags what's broken, it doesn't guess at a translation. When it reports a missing
+key, add the real translation - don't invent a placeholder-value pair that merely makes the
+check pass. When it reports a placeholder mismatch, look at what the base string actually
+interpolates and fix the translation to match, not the other way around (the base is the
+source of truth). When it reports something you're confident is a false positive on the
+untranslated-value heuristic, use `--allow-identical`/`--do-not-translate` rather than
+ignoring the finding - that keeps the check meaningful for the next change instead of
+training yourself to skim past it.
 
-No network access, no dependencies, nothing leaves the machine.
+`--fix` is the one narrow exception, and it's worth knowing exactly what it does: it can
+insert a key that's entirely missing from a locale file, tagged with an unmissable
+`[UNTRANSLATED]` marker (`.po` gets its own `fuzzy` flag instead) so it can never be
+mistaken for a real translation. It never writes translated text, never touches a key that
+already exists, and never touches the identical-to-base heuristic. If you've just added a
+key to the base locale and want every other locale to at least have a stub to fill in, run
+`translint locales/ --fix --dry-run` first to see exactly what would be inserted, then
+`translint locales/ --fix` for real - and still go translate what it stubbed out before
+calling the work done.
+
+No network access, no dependencies, nothing leaves the machine. `--fix` writes to the
+locale files you point it at (that's the point of it) - everything else about translint,
+`--fix` included, is still local and offline.

@@ -823,3 +823,306 @@ def test_importable_api_returns_structured_result_without_cli():
     r = translint.check_locale(base, locale, "fr", "fr.json", "json")
     assert r["ok"] is True
     assert isinstance(r, dict)
+
+
+# ---------------------------------------------------------------------------
+# --fix: insertion functions in isolation, each format
+# ---------------------------------------------------------------------------
+
+
+def test_fix_json_inserts_missing_key_with_marker():
+    text = '{\n  "a": "Hello"\n}\n'
+    base = {"a": "Hello", "b": "World"}
+    new_text = translint.fix_missing_keys_json(text, ["b"], base)
+    assert new_text == '{\n  "a": "Hello",\n  "b": "[UNTRANSLATED] World"\n}\n'
+    assert translint.parse_json(new_text, "x.json") == {
+        "a": "Hello", "b": "[UNTRANSLATED] World",
+    }
+
+
+def test_fix_json_only_appends_every_original_line_stays_verbatim():
+    # every existing line is untouched, except the one line that was
+    # previously last and needs a trailing comma now that a sibling
+    # follows it - that's the one mechanically-necessary edit valid JSON
+    # requires, not a rewrite of its content
+    text = '{\n  "a": "Bonjour",\n  "c": "Hello {name}"\n}\n'
+    base = {"a": "Hello", "b": "World", "c": "Hello {name}"}
+    new_text = translint.fix_missing_keys_json(text, ["b"], base)
+    old_lines, new_lines = text.splitlines(), new_text.splitlines()
+    assert new_lines[:2] == old_lines[:2]  # "{" and the untouched "a" line
+    assert new_lines[2] == old_lines[2] + ","  # "c" line, comma appended
+    assert new_lines[-1] == old_lines[-1]  # closing "}"
+
+
+def test_fix_json_missing_flat_key_is_functionally_identical_to_nesting():
+    # a missing "nav.settings" gets appended as a flat top-level key even
+    # in a file that nests everything else - flatten_json() treats a flat
+    # dotted key and a nested path the same way, which is exactly why this
+    # is safe (see fix_missing_keys_json's docstring)
+    text = '{\n  "nav": {\n    "home": "Home"\n  }\n}\n'
+    base = {"nav.home": "Home", "nav.settings": "Settings"}
+    new_text = translint.fix_missing_keys_json(text, ["nav.settings"], base)
+    assert translint.parse_json(new_text, "x.json") == {
+        "nav.home": "Home", "nav.settings": "[UNTRANSLATED] Settings",
+    }
+
+
+def test_fix_json_multiple_missing_keys_in_one_pass():
+    text = '{\n  "a": "Hello"\n}\n'
+    base = {"a": "Hello", "b": "World", "c": "Foo"}
+    new_text = translint.fix_missing_keys_json(text, ["b", "c"], base)
+    assert translint.parse_json(new_text, "x.json") == {
+        "a": "Hello",
+        "b": "[UNTRANSLATED] World",
+        "c": "[UNTRANSLATED] Foo",
+    }
+
+
+def test_fix_json_empty_object():
+    new_text = translint.fix_missing_keys_json("{}\n", ["a"], {"a": "Hello"})
+    assert translint.parse_json(new_text, "x.json") == {"a": "[UNTRANSLATED] Hello"}
+
+
+def test_fix_json_empty_base_value_marker_has_no_dangling_space():
+    new_text = translint.fix_missing_keys_json("{}\n", ["a"], {"a": ""})
+    assert translint.parse_json(new_text, "x.json") == {"a": "[UNTRANSLATED]"}
+
+
+def test_fix_properties_appends_missing_key_with_marker():
+    text = "app.title=Hello\n"
+    base = {"app.title": "Hello", "app.greeting": "Hi there"}
+    new_text = translint.fix_missing_keys_properties(text, ["app.greeting"], base)
+    assert new_text == "app.title=Hello\napp.greeting=[UNTRANSLATED] Hi there\n"
+    assert translint.parse_properties(new_text, "x.properties") == {
+        "app.title": "Hello", "app.greeting": "[UNTRANSLATED] Hi there",
+    }
+
+
+def test_fix_properties_only_appends_existing_line_untouched():
+    text = "app.title=Bonjour\n"
+    base = {"app.title": "Hello", "app.greeting": "Hi there"}
+    new_text = translint.fix_missing_keys_properties(text, ["app.greeting"], base)
+    assert new_text.startswith("app.title=Bonjour\n")
+
+
+def test_fix_properties_escapes_backslash_and_control_chars_in_inserted_value():
+    # a base value with a literal backslash and newline must round-trip
+    # back to the exact same string through parse_properties/_properties_unescape
+    text = "a=Hello\n"
+    base = {"a": "Hello", "b": "Line one\nLine two \\ end"}
+    new_text = translint.fix_missing_keys_properties(text, ["b"], base)
+    result = translint.parse_properties(new_text, "x.properties")
+    assert result["b"] == "[UNTRANSLATED] Line one\nLine two \\ end"
+
+
+def test_fix_po_inserts_fuzzy_entry_for_missing_key():
+    text = 'msgid "app.title"\nmsgstr "Bonjour"\n'
+    base = {"app.title": "Hello", "app.greeting": "Hi there"}
+    new_text = translint.fix_missing_keys_po(text, ["app.greeting"], base)
+    assert "#, fuzzy" in new_text
+    assert 'msgid "app.greeting"' in new_text
+    assert 'msgstr "Hi there"' in new_text
+    # a fuzzy entry is invisible to parse_po, exactly like msgfmt treats it -
+    # the fixed key still reads back as missing until someone actually
+    # translates it and drops the fuzzy flag, so --fix can never make a
+    # still-untranslated .po key look finished
+    assert translint.parse_po(new_text, "x.po") == {"app.title": "Bonjour"}
+
+
+def test_fix_po_only_appends_existing_entry_untouched():
+    text = 'msgid "app.title"\nmsgstr "Bonjour"\n'
+    base = {"app.title": "Hello", "app.greeting": "Hi there"}
+    new_text = translint.fix_missing_keys_po(text, ["app.greeting"], base)
+    assert new_text.startswith('msgid "app.title"\nmsgstr "Bonjour"\n')
+
+
+def test_fix_po_msgctxt_key_round_trips():
+    text = 'msgid "plain"\nmsgstr "Bonjour"\n'
+    base = {"plain": "Hello", ("verb", "Close"): "Close"}
+    new_text = translint.fix_missing_keys_po(text, [("verb", "Close")], base)
+    assert 'msgctxt "verb"' in new_text
+    assert 'msgid "Close"' in new_text
+    assert "#, fuzzy" in new_text
+
+
+# ---------------------------------------------------------------------------
+# --fix: CLI end-to-end, on real files on disk
+# ---------------------------------------------------------------------------
+
+
+def test_cli_default_never_writes_a_file():
+    with tempfile.TemporaryDirectory() as d:
+        en_path = os.path.join(d, "en.json")
+        de_path = os.path.join(d, "de.json")
+        with open(en_path, "w", encoding="utf-8") as fh:
+            fh.write('{\n  "a": "Hello",\n  "b": "World"\n}\n')
+        with open(de_path, "w", encoding="utf-8") as fh:
+            fh.write('{\n  "a": "Hallo"\n}\n')
+        before = open(de_path, encoding="utf-8").read()
+
+        run_cli([d, "--base", "en"])  # no --fix at all
+
+        after = open(de_path, encoding="utf-8").read()
+        assert after == before
+
+
+def test_cli_dry_run_without_fix_errors_cleanly():
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "en.json"), "w", encoding="utf-8") as fh:
+            json.dump({"a": "Hello"}, fh)
+        code, out, err = run_cli_err([d, "--base", "en", "--dry-run"])
+        assert code == 2
+        assert "--dry-run" in err
+
+
+def test_cli_fix_dry_run_writes_nothing_but_reports_what_it_would_insert():
+    with tempfile.TemporaryDirectory() as d:
+        en_path = os.path.join(d, "en.json")
+        de_path = os.path.join(d, "de.json")
+        with open(en_path, "w", encoding="utf-8") as fh:
+            fh.write('{\n  "a": "Hello",\n  "b": "World"\n}\n')
+        with open(de_path, "w", encoding="utf-8") as fh:
+            fh.write('{\n  "a": "Hallo"\n}\n')
+        before = open(de_path, encoding="utf-8").read()
+
+        code, out, err = run_cli_err([d, "--base", "en", "--fix", "--dry-run"])
+        assert code == 1  # nothing was actually inserted, "b" is still missing
+
+        after = open(de_path, encoding="utf-8").read()
+        assert after == before  # byte-for-byte unchanged on disk
+        assert "would insert" in err
+        assert "[UNTRANSLATED]" not in after  # confirms it really wasn't written
+
+
+def test_cli_fix_inserts_missing_key_minimal_diff():
+    with tempfile.TemporaryDirectory() as d:
+        en_path = os.path.join(d, "en.json")
+        de_path = os.path.join(d, "de.json")
+        with open(en_path, "w", encoding="utf-8") as fh:
+            fh.write('{\n  "a": "Hello",\n  "b": "World"\n}\n')
+        with open(de_path, "w", encoding="utf-8") as fh:
+            fh.write('{\n  "a": "Hallo"\n}\n')
+
+        code, out = run_cli([d, "--base", "en", "--fix"])
+        assert code == 0  # the only issue was the missing key, now fixed
+
+        fixed = open(de_path, encoding="utf-8").read()
+        assert fixed == '{\n  "a": "Hallo",\n  "b": "[UNTRANSLATED] World"\n}\n'
+
+
+def test_cli_fix_then_recheck_no_longer_reports_the_key_missing():
+    with tempfile.TemporaryDirectory() as d:
+        en_path = os.path.join(d, "en.json")
+        de_path = os.path.join(d, "de.json")
+        with open(en_path, "w", encoding="utf-8") as fh:
+            fh.write('{\n  "a": "Hello",\n  "b": "World"\n}\n')
+        with open(de_path, "w", encoding="utf-8") as fh:
+            fh.write('{\n  "a": "Hallo"\n}\n')
+
+        run_cli([d, "--base", "en", "--fix"])
+        code, out = run_cli([d, "--base", "en", "--json"])
+
+        results = json.loads(out)
+        assert results[0]["missing_keys"] == []
+        assert code == 0
+
+
+def test_cli_fix_never_touches_the_identical_to_base_finding():
+    with tempfile.TemporaryDirectory() as d:
+        en_path = os.path.join(d, "en.json")
+        de_path = os.path.join(d, "de.json")
+        with open(en_path, "w", encoding="utf-8") as fh:
+            fh.write('{\n  "brand": "Acme",\n  "missing": "New Key"\n}\n')
+        with open(de_path, "w", encoding="utf-8") as fh:
+            fh.write('{\n  "brand": "Acme"\n}\n')
+
+        code, out = run_cli([d, "--base", "en", "--fix", "--json"])
+
+        fixed = open(de_path, encoding="utf-8").read()
+        # "brand": "Acme" is the identical-to-base heuristic hit - still
+        # flagged every run (see the assertion below), and --fix must never
+        # rewrite it - there's exactly one copy, untouched, in the file
+        assert fixed.count('"brand": "Acme"') == 1
+        results = json.loads(out)
+        assert results[0]["untranslated_values"] == ["brand"]
+
+
+def test_cli_fix_never_overwrites_an_existing_placeholder_mismatch():
+    with tempfile.TemporaryDirectory() as d:
+        en_path = os.path.join(d, "en.json")
+        de_path = os.path.join(d, "de.json")
+        with open(en_path, "w", encoding="utf-8") as fh:
+            fh.write('{\n  "a": "Hi {name}",\n  "b": "New Key"\n}\n')
+        with open(de_path, "w", encoding="utf-8") as fh:
+            fh.write('{\n  "a": "Hallo"\n}\n')  # dropped the {name} placeholder
+
+        code, out = run_cli([d, "--base", "en", "--fix", "--json"])
+        results = json.loads(out)
+        assert results[0]["placeholder_mismatches"] != []  # still flagged, untouched
+
+        fixed = open(de_path, encoding="utf-8").read()
+        assert '"a": "Hallo"' in fixed  # exact original value, byte for byte
+
+
+def test_cli_fix_with_nothing_missing_is_a_no_op():
+    with tempfile.TemporaryDirectory() as d:
+        en_path = os.path.join(d, "en.json")
+        de_path = os.path.join(d, "de.json")
+        with open(en_path, "w", encoding="utf-8") as fh:
+            fh.write('{\n  "a": "Hello"\n}\n')
+        with open(de_path, "w", encoding="utf-8") as fh:
+            fh.write('{\n  "a": "Hallo"\n}\n')
+        before = open(de_path, encoding="utf-8").read()
+
+        code, out = run_cli([d, "--base", "en", "--fix"])
+        assert code == 0
+
+        after = open(de_path, encoding="utf-8").read()
+        assert after == before
+
+
+def test_cli_fix_summary_prints_to_stderr_json_output_stays_pure():
+    with tempfile.TemporaryDirectory() as d:
+        en_path = os.path.join(d, "en.json")
+        de_path = os.path.join(d, "de.json")
+        with open(en_path, "w", encoding="utf-8") as fh:
+            fh.write('{\n  "a": "Hello",\n  "b": "World"\n}\n')
+        with open(de_path, "w", encoding="utf-8") as fh:
+            fh.write('{\n  "a": "Hallo"\n}\n')
+
+        code, out, err = run_cli_err([d, "--base", "en", "--fix", "--json"])
+        json.loads(out)  # still pure, parseable JSON - didn't get the summary mixed in
+        assert "b" in err  # the human summary landed on stderr instead
+
+
+def test_cli_fix_po_writes_fuzzy_entry_leaves_existing_entry_untouched():
+    with tempfile.TemporaryDirectory() as d:
+        en_path = os.path.join(d, "en.po")
+        es_path = os.path.join(d, "es.po")
+        with open(en_path, "w", encoding="utf-8") as fh:
+            fh.write('msgid "a"\nmsgstr "Hello"\n\nmsgid "b"\nmsgstr "World"\n')
+        with open(es_path, "w", encoding="utf-8") as fh:
+            fh.write('msgid "a"\nmsgstr "Hola"\n')
+
+        run_cli([d, "--base", "en", "--fix"])
+
+        fixed = open(es_path, encoding="utf-8").read()
+        assert fixed.startswith('msgid "a"\nmsgstr "Hola"\n')
+        assert "#, fuzzy" in fixed
+        assert 'msgid "b"' in fixed
+
+
+def test_cli_fix_properties_writes_marked_line_leaves_existing_line_untouched():
+    with tempfile.TemporaryDirectory() as d:
+        en_path = os.path.join(d, "en.properties")
+        ja_path = os.path.join(d, "ja.properties")
+        with open(en_path, "w", encoding="utf-8") as fh:
+            fh.write("a=Hello\nb=World\n")
+        with open(ja_path, "w", encoding="utf-8") as fh:
+            fh.write("a=Konnichiwa\n")
+
+        run_cli([d, "--base", "en", "--fix"])
+
+        fixed = open(ja_path, encoding="utf-8").read()
+        assert fixed.startswith("a=Konnichiwa\n")
+        assert "b=[UNTRANSLATED] World" in fixed

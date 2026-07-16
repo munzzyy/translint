@@ -19,10 +19,17 @@ Usage:
   translint locales/ --json                   # machine-readable
   translint locales/ --strict                 # also fail on extra/untranslated
   translint locales/ --allow-identical brand.name   # suppress one heuristic hit
+  translint locales/ --fix                    # insert MISSING keys only, marked
+  translint locales/ --fix --dry-run          # show what --fix would insert
 
 Exit code is 0 when every locale is clean, 1 when translint found something
 to fix, and 2 if a path couldn't be read or parsed at all - so a crash and
 a lint finding never look the same to a script.
+
+--fix never guesses at a translation. It only ever inserts a key that's
+entirely missing from a locale file, tagged with an unmissable marker
+([UNTRANSLATED], or .po's own fuzzy flag) that can't pass for a real
+translation - see the "Fix mode" section below for the full scoping.
 """
 import argparse
 import glob
@@ -636,6 +643,190 @@ def report(results):
 
 
 # ---------------------------------------------------------------------------
+# --fix: insert missing keys, and only missing keys
+#
+# The whole safety model in one sentence: --fix only ever ADDS a key that's
+# entirely absent from a locale file, and it marks what it adds so loudly
+# that it can never pass for a finished translation. It never touches a key
+# that already exists - not to "fix" a placeholder mismatch, not to fill in
+# an empty value, and never the identical-to-base heuristic, which stays
+# report-only, permanently (see check_locale's docstring). Silently writing
+# the base-language string in as if it were translated would make the exact
+# problem translint exists to catch invisible instead of caught, which is
+# why there's no code path here that ever does that.
+#
+# JSON/.properties get an explicit [UNTRANSLATED] text marker. .po gets the
+# format's own fuzzy flag instead of a text marker, since parse_po already
+# treats a fuzzy entry as not a live translation (its own docstring says
+# msgfmt doesn't compile them either) - a freshly-inserted fuzzy entry
+# reads back as still-missing on the next run, the same outcome the bracket
+# marker produces for the other two formats, without inventing a second,
+# redundant tag.
+#
+# Every inserter below only ever appends new text - never rewrites, moves,
+# or reformats an existing line - so the round-trip diff is exactly the new
+# key(s) and nothing else, regardless of how the rest of the file is styled.
+# ---------------------------------------------------------------------------
+
+UNTRANSLATED_MARKER = "[UNTRANSLATED]"
+
+
+def _untranslated_value(base_value):
+    """The value --fix writes for a newly-inserted key: the marker, plus
+    the base string itself so a translator has the exact source text and
+    placeholders to start from without reopening the base file. Never just
+    the base string alone - that's the silent-fake-translation failure
+    mode this whole feature exists to avoid."""
+    if not base_value:
+        return UNTRANSLATED_MARKER
+    return f"{UNTRANSLATED_MARKER} {base_value}"
+
+
+def _json_detect_indent(text):
+    """Sniff the indent unit from this file's own first indented key line
+    rather than assuming one - reformatting every existing line to a
+    guessed width is exactly the "bad fix" the whole feature has to avoid.
+    Falls back to two spaces (what every fixture and example in this repo
+    already uses) for a single-line file with no indented line to sniff."""
+    for line in text.splitlines()[1:]:
+        stripped = line.lstrip(" \t")
+        if stripped.startswith('"'):
+            return line[:len(line) - len(stripped)]
+    return "  "
+
+
+def fix_missing_keys_json(text, missing_keys, base):
+    """Insert every key in missing_keys as a new flat, dot-namespaced
+    top-level member, immediately before the file's closing brace -
+    deliberately never descended into a matching nested object.
+    flatten_json() already treats a top-level "nav.settings" key exactly
+    the same as a nested {"nav": {"settings": ...}} one (see its own
+    docstring), so this is functionally identical for every check translint
+    runs, and it means --fix only ever touches the handful of characters
+    right before the final "}" - no existing line moves, no brace tree to
+    walk or rebuild, nothing to get wrong on a deeply nested real file."""
+    close_idx = text.rfind("}")
+    open_idx = text.find("{")
+    if close_idx == -1 or open_idx == -1 or open_idx > close_idx:
+        raise ValueError("not a JSON object - can't insert a fixed key")
+
+    indent = _json_detect_indent(text)
+    new_lines = [
+        f"{indent}{json.dumps(key, ensure_ascii=False)}: "
+        f"{json.dumps(_untranslated_value(base[key]), ensure_ascii=False)}"
+        for key in missing_keys
+    ]
+    insertion = ",\n".join(new_lines)
+
+    is_empty = not text[open_idx + 1:close_idx].strip()
+    before = text[:close_idx].rstrip()
+    after = text[close_idx:]
+    sep = "" if is_empty else ","
+    return f"{before}{sep}\n{insertion}\n{after}"
+
+
+_PROPERTIES_KEY_ESCAPE_RX = re.compile(r"[\\=: \t]")
+_PROPERTIES_VALUE_ESCAPES = {"\\": "\\\\", "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+
+
+def _properties_escape_key(key):
+    """Escape the handful of characters parse_properties' own key-splitting
+    regex reads as the key/value separator, so a key that happens to
+    contain one (unusual for a dotted key, but not impossible) still reads
+    back as one key instead of splitting early."""
+    return _PROPERTIES_KEY_ESCAPE_RX.sub(lambda m: "\\" + m.group(0), key)
+
+
+def _properties_escape_value(value):
+    """Escape backslashes and control characters _properties_unescape would
+    otherwise decode back out of a freshly-written value - the write-side
+    mirror of that function. Left plain otherwise: non-ASCII characters are
+    written raw, matching how this repo's own ja.properties fixture already
+    stores them, not re-encoded to \\uXXXX native2ascii form."""
+    return "".join(_PROPERTIES_VALUE_ESCAPES.get(ch, ch) for ch in value)
+
+
+def fix_missing_keys_properties(text, missing_keys, base):
+    """Append every key in missing_keys as a new line at the end of the
+    file. .properties has no nesting and no required key order, so unlike
+    JSON there's no single "right" place to insert one - appending is both
+    the simplest option and the one guaranteed not to touch an existing
+    line."""
+    lines = [
+        f"{_properties_escape_key(key)}="
+        f"{_properties_escape_value(_untranslated_value(base[key]))}"
+        for key in missing_keys
+    ]
+    return text.rstrip("\n") + "\n" + "\n".join(lines) + "\n"
+
+
+def fix_missing_keys_po(text, missing_keys, base):
+    """Append every key in missing_keys as a new "#, fuzzy" msgid/msgstr
+    block at the end of the file, separated from the last entry by a blank
+    line (matching the blank-line-separated entries already in every .po
+    fixture in this repo). msgstr carries the base value verbatim, not the
+    [UNTRANSLATED] text marker - the fuzzy flag IS the marker here, since
+    parse_po already skips fuzzy entries outright (see its docstring), so
+    the fixed key still reads back as missing on the next run rather than
+    as a finished translation."""
+    blocks = []
+    for key in missing_keys:
+        msgctxt, msgid = key if isinstance(key, tuple) else (None, key)
+        lines = ["#, fuzzy"]
+        if msgctxt is not None:
+            lines.append(f"msgctxt {json.dumps(msgctxt, ensure_ascii=False)}")
+        lines.append(f"msgid {json.dumps(msgid, ensure_ascii=False)}")
+        lines.append(f"msgstr {json.dumps(base[key], ensure_ascii=False)}")
+        blocks.append("\n".join(lines))
+    return text.rstrip("\n") + "\n\n" + "\n\n".join(blocks) + "\n"
+
+
+FIX_INSERTERS = {"json": fix_missing_keys_json, "po": fix_missing_keys_po,
+                  "properties": fix_missing_keys_properties}
+
+
+def _key_display(key):
+    """Human-readable form of a check_locale key for the --fix summary - a
+    plain string for every format except .po's (msgctxt, msgid) tuples."""
+    if isinstance(key, tuple):
+        msgctxt, msgid = key
+        return f"{msgid} (msgctxt={msgctxt})"
+    return key
+
+
+def apply_fix(results, base, dry_run=False):
+    """Insert missing keys for every locale result that has any, using the
+    format-appropriate inserter above. Reads and (unless dry_run) rewrites
+    each affected file directly - the one place in translint that writes
+    anything besides stdout, and only ever this: new keys appended, nothing
+    existing rewritten. Returns a human-readable summary string (None if
+    there was nothing to insert) - the caller prints it to stderr, never
+    stdout, so --json/--quiet output stays exactly the machine-readable
+    contract JSON_SCHEMA_KEYS promises, --fix or not."""
+    lines = []
+    for r in results:
+        if not r["missing_keys"]:
+            continue
+        inserter = FIX_INSERTERS[r["format"]]
+        path = r["path"]
+        with open(path, "r", encoding="utf-8-sig", errors="replace") as fh:
+            text = fh.read()
+        new_text = inserter(text, r["missing_keys"], base)
+        if not dry_run:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(new_text)
+        keys_display = ", ".join(_key_display(k) for k in r["missing_keys"])
+        lines.append(f"  {r['locale']} ({path}): "
+                      f"{len(r['missing_keys'])} key(s) - {keys_display}")
+    if not lines:
+        return None
+    verb = "would insert" if dry_run else "inserted"
+    header = f"translint --fix: {verb} missing keys" + (" (dry run, nothing written)"
+                                                          if dry_run else "")
+    return "\n".join([header] + lines)
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -673,8 +864,20 @@ def main(argv=None):
                     help="path to a .translintrc.json with allow_identical/do_not_translate "
                          "lists (default: .translintrc.json in the scanned directory, if present)")
     ap.add_argument("--quiet", action="store_true", help="summary line only")
+    ap.add_argument("--fix", action="store_true",
+                    help="insert MISSING keys only, each tagged with an unmissable "
+                         "[UNTRANSLATED] marker (.po gets its own fuzzy flag instead) - "
+                         "never touches an existing key, never invents a translation "
+                         "(see README 'Fix mode')")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="with --fix, show exactly what would be inserted without "
+                         "writing any file")
     ap.add_argument("--version", action="version", version=f"translint {__version__}")
     args = ap.parse_args(argv)
+
+    if args.dry_run and not args.fix:
+        print("translint: --dry-run only makes sense with --fix", file=sys.stderr)
+        return 2
 
     allow_identical = list(args.allow_identical)
     do_not_translate = list(args.do_not_translate)
@@ -729,25 +932,47 @@ def main(argv=None):
         print(f"translint: {exc}", file=sys.stderr)
         return 2
 
-    results = []
-    for f in files:
-        if f == base_path:
-            continue
-        try:
-            locale_dict, fmt = load_locale(f, fmt=args.format)
-        except (ValueError, OSError) as exc:
-            print(f"translint: {exc}", file=sys.stderr)
-            return 2
-        r = check_locale(
-            base_dict, locale_dict, locale_name_from_path(f), f, fmt,
-            do_not_translate=do_not_translate, allow_identical=allow_identical,
-        )
-        results.append(r)
+    # A plain function, not a loop inlined twice: --fix needs this exact same
+    # check re-run against the files it just rewrote, so the report and exit
+    # code reflect what's actually on disk afterward, not a stale pre-fix
+    # snapshot. Returns None (having already printed the error) on a parse
+    # failure, same as the rest of main()'s error handling.
+    def check_all_locales():
+        out = []
+        for f in files:
+            if f == base_path:
+                continue
+            try:
+                locale_dict, fmt = load_locale(f, fmt=args.format)
+            except (ValueError, OSError) as exc:
+                print(f"translint: {exc}", file=sys.stderr)
+                return None
+            out.append(check_locale(
+                base_dict, locale_dict, locale_name_from_path(f), f, fmt,
+                do_not_translate=do_not_translate, allow_identical=allow_identical,
+            ))
+        return out
+
+    results = check_all_locales()
+    if results is None:
+        return 2
 
     if not results:
         print(f"translint: only the base locale ('{args.base}') was found, nothing to check",
               file=sys.stderr)
         return 2
+
+    if args.fix:
+        # Always printed to stderr, never stdout - --json/--quiet output on
+        # stdout must stay exactly the machine-readable contract regardless
+        # of whether --fix had anything to insert.
+        summary = apply_fix(results, base_dict, dry_run=args.dry_run)
+        if summary:
+            print(summary, file=sys.stderr)
+            if not args.dry_run:
+                results = check_all_locales()
+                if results is None:
+                    return 2
 
     if args.json:
         print(json.dumps(results, indent=2))

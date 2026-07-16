@@ -113,6 +113,8 @@ translint locales/ --json                   # machine-readable report
 translint locales/ --strict                 # also fail on extra keys + untranslated
 translint locales/ --allow-identical brand.name   # suppress one heuristic false positive
 translint locales/*.json --base en          # globs work even on Windows shells
+translint locales/ --fix --dry-run          # preview what --fix would insert
+translint locales/ --fix                    # insert missing keys, loudly marked
 ```
 
 `--base` (default `en`) is the locale name - the filename stem, so `en` means `en.json`,
@@ -203,6 +205,62 @@ what `--allow-identical` and `--do-not-translate` are for. Silence a hit that wa
 ignoring the finding, so the check stays useful for the next change instead of turning
 into noise you've trained yourself to skim past.
 
+## Fix mode
+
+`--fix` does exactly one thing: it inserts keys that are **completely missing** from a
+locale file - present in the base, absent here entirely - and nothing else. Every other
+finding (extra keys, placeholder mismatches, empty values, untranslated-value hits) stays
+report-only, exactly like it does without `--fix`. Default behavior doesn't change; you
+have to opt in.
+
+```bash
+translint locales/ --fix --dry-run   # show exactly what would be inserted, write nothing
+translint locales/ --fix             # insert it for real
+```
+
+What actually gets written, for a key `checkout.confirm` whose base value is `You're about
+to charge {amount}`:
+
+- **JSON / .properties** get the literal English base text back, prefixed with an
+  unmissable `[UNTRANSLATED]` tag: `"checkout.confirm": "[UNTRANSLATED] You're about to
+  charge {amount}"`. The placeholder comes along for the ride, so the string still has the
+  right tokens once someone translates it - it just isn't translated yet, and says so.
+- **.po** gets a new entry marked with gettext's own `fuzzy` flag instead of a text tag:
+
+  ```
+  #, fuzzy
+  msgid "checkout.confirm"
+  msgstr "You're about to charge {amount}"
+  ```
+
+  translint's own `.po` parser already skips fuzzy entries as not-live (`msgfmt` doesn't
+  compile them either), so a fuzzy-flagged key you just inserted reads back as **still
+  missing** on the very next run, the same way `[UNTRANSLATED]` does for the other two
+  formats. There's no way for a fuzzy entry to be mistaken for a finished translation by
+  translint or by `msgfmt`.
+
+What it will never do, on purpose:
+
+- **Never write a real translation.** There's no translation engine here, and there's
+  never going to be one - see [CONTRIBUTING.md](CONTRIBUTING.md). If it's not in the base
+  file already, `--fix` doesn't invent it.
+- **Never touch the identical-to-base heuristic.** A key that already exists but is flagged
+  `untranslated_values` stays exactly as it is, forever. `--fix` only adds keys that don't
+  exist at all; it doesn't second-guess a value that's already there, correct guess or not.
+- **Never rewrite an existing translation**, even a broken one. A placeholder mismatch or an
+  empty value on a key that already exists is left alone, byte for byte - only a genuinely
+  absent key gets written.
+- **Never reformat the file.** Every existing line stays exactly as it was (aside from a
+  trailing comma added to what was previously the last JSON member, since valid JSON
+  requires one once a sibling follows it). New keys are appended - as a new flat
+  `"key.path"` member for JSON (functionally identical to nesting it, since translint
+  flattens both the same way when it checks - see the [Formats](#formats) section), a new
+  line for `.properties`, a new blank-line-separated entry for `.po` - so the diff a fix
+  produces is exactly the new key(s) and nothing else.
+
+`--dry-run` only makes sense alongside `--fix`; it prints the same summary but writes
+nothing, so you can see exactly what would land before it does.
+
 ## As a pre-commit hook
 
 ```yaml
@@ -244,7 +302,9 @@ keys and untranslated-value hits, not just missing keys/mismatches/empty values.
   allowlist entry, same as any linter's suppression comment.
 - **It doesn't translate anything.** translint tells you what's missing or broken. Writing
   the actual translation is still your job (or your translator's, or your agent's, but
-  translint isn't going to guess at one).
+  translint isn't going to guess at one). `--fix` (see [Fix mode](#fix-mode)) can insert a
+  loudly-marked placeholder for a key that's missing entirely, but it never writes real
+  translated text - that's a hard line, not a version-1 limitation.
 - **It doesn't validate translation quality.** A translation that's grammatically wrong,
   culturally off, or just bad prose passes every check here as long as the keys, tokens,
   and non-empty-ness line up. That's a different problem than the one this tool solves.

@@ -25,10 +25,13 @@ what actually helps.
 
 Things that are out of scope: YAML support (it needs a dependency, and
 this tool is stdlib-only on purpose - see the README's "what it does NOT
-do" section), an auto-translate or auto-fix mode (translint's job is to
-tell you what's broken, not guess at a fix), and anything that adds a
-network call. A PR that adds a dependency or a network call won't be
-merged, no matter how good the feature is.
+do" section), an auto-translate mode of any kind (translint's job is to
+tell you what's broken, not guess at a translation - `--fix` only ever
+inserts a key that's missing entirely, tagged so it can never pass for a
+real one, see the README's "Fix mode" section for the exact scoping),
+and anything that adds a network call. A PR that adds a dependency, a
+network call, or that widens `--fix` to touch a key that already
+exists won't be merged, no matter how good the feature is.
 
 ## Dev setup
 

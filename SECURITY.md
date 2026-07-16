@@ -2,10 +2,18 @@
 
 translint is a single-file, offline linter. It reads locale files you point
 it at (JSON, .po, .properties) and prints a report to stdout. It doesn't
-make network calls, doesn't read credentials, and doesn't write anything
-besides its own stdout. Parsing never uses `eval`/`exec` - JSON goes through
-`json.loads`, and the .po/.properties parsers are plain text/regex
-processing, so a malicious locale file can't run code through translint.
+make network calls and doesn't read credentials. Parsing never uses
+`eval`/`exec` - JSON goes through `json.loads`, and the .po/.properties
+parsers are plain text/regex processing, so a malicious locale file can't
+run code through translint.
+
+By default it doesn't write anything besides its own stdout. The one
+opt-in exception is `--fix`, which rewrites the locale files you pass it -
+and only ever to append a key that's entirely missing, tagged with an
+unmissable marker (see the README's "Fix mode" section). It never
+overwrites an existing key, never runs code from the file it's editing,
+and never touches the network. `--fix --dry-run` shows exactly what it
+would write without touching disk.
 
 The realistic attack surface is small, but if you find something, here's
 how to report it.
