@@ -7,6 +7,6 @@
   },
   "homepage": "https://github.com/munzzyy/translint",
   "repository": "https://github.com/munzzyy/translint",
-  "license": "Prosperity Public License 3.0.0",
+  "license": "MIT",
   "keywords": ["i18n", "l10n", "localization", "linter", "translation", "ci"]
 }

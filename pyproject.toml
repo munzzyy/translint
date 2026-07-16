@@ -8,10 +8,11 @@ version = "0.4.0"
 description = "Catch broken translations before they ship: missing keys, placeholder mismatches, empty and untranslated values."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "Prosperity Public License 3.0.0" }
+license = { text = "MIT" }
 authors = [{ name = "Cole Munz" }]
 keywords = ["i18n", "l10n", "localization", "linter", "translation", "ci"]
 classifiers = [
+    "License :: OSI Approved :: MIT License",
     "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: Developers",

@@ -6,7 +6,7 @@ empty values, values that still look untranslated, and the one that actually tak
 down — placeholder tokens that don't match between the base string and the translation.
 
 [![CI](https://github.com/munzzyy/translint/actions/workflows/ci.yml/badge.svg)](https://github.com/munzzyy/translint/actions/workflows/ci.yml)
-[![License: Prosperity 3.0.0](https://img.shields.io/badge/license-Prosperity--3.0.0-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![zero dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
 
 ![translint catching a missing key and a placeholder rename in a German locale file, plus a missing key, a stale extra key, and another placeholder mismatch in a French one](docs/media/demo.svg)
@@ -253,7 +253,4 @@ keys and untranslated-value hits, not just missing keys/mismatches/empty values.
 
 ## License
 
-[Prosperity Public License 3.0.0](LICENSE). Free for noncommercial use: personal projects,
-hobby work, research, education, nonprofits, and government all qualify. Commercial use
-gets a thirty-day trial, and past that it needs a paid license. To sort one out, open an
-issue or email Munzzyy5@proton.me.
+MIT — free to use, change, and ship, commercial or not. See [LICENSE](LICENSE).

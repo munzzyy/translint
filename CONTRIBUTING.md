@@ -103,14 +103,8 @@ report actionable (exact input, exact output, what you expected).
 
 ## License of contributions
 
-translint is under the [Prosperity Public License](LICENSE): free for
-noncommercial use, commercial use by paid license. So the project stays
-maintainable under one owner, contributions are taken under the
-[Blue Oak Model License 1.0.0](https://blueoakcouncil.org/license/1.0.0),
-a simple permissive license. Opening a PR means you're offering your change
-under those terms. Prosperity's own "Contributions Back" clause is written
-for exactly this, so sending a fix back never counts as commercial use on
-your end.
+translint is [MIT licensed](LICENSE). Opening a PR means you're offering your
+change under the same MIT license.
 
 ## Security issues
 
