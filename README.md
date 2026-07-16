@@ -6,6 +6,7 @@ empty values, values that still look untranslated, and the one that actually tak
 down — placeholder tokens that don't match between the base string and the translation.
 
 [![CI](https://github.com/munzzyy/translint/actions/workflows/ci.yml/badge.svg)](https://github.com/munzzyy/translint/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/translint)](https://pypi.org/project/translint/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![zero dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
 
@@ -254,3 +255,7 @@ keys and untranslated-value hits, not just missing keys/mismatches/empty values.
 ## License
 
 MIT — free to use, change, and ship, commercial or not. See [LICENSE](LICENSE).
+
+## Support
+
+If translint caught a broken locale before your users saw it, [sponsoring](https://github.com/sponsors/munzzyy) is what keeps it maintained.
