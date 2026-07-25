@@ -38,14 +38,18 @@ import os
 import re
 import sys
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 # check_locale()'s return dict is translint's only machine-readable contract.
 # If you add, rename, or remove a top-level key, update this set and bump
 # the version - anything parsing --json is relying on these names staying put.
+# In --json output a .po key that carried a msgctxt is emitted as the string
+# "msgctxt\x04msgid" (gettext's own EOT convention), so every key stays a
+# string rather than a nested [ctxt, id] array - see _key_json.
 JSON_SCHEMA_KEYS = {
     "locale", "path", "format", "missing_keys", "extra_keys",
-    "placeholder_mismatches", "empty_values", "untranslated_values", "ok",
+    "placeholder_mismatches", "empty_values", "untranslated_values",
+    "untranslated_markers", "ok",
 }
 
 SUPPORTED_FORMATS = ("json", "po", "properties")
@@ -83,13 +87,20 @@ EXT_TO_FORMAT = {
 
 _RX_DOUBLEBRACE = re.compile(r"\{\{\s*([\w.]+)\s*\}\}")
 _RX_BRACE = re.compile(r"\{([A-Za-z_][\w.]*|\d*)\}")
-_RX_PYNAMED = re.compile(r"%\((\w+)\)[sdifr%]")
+# Python %(name)s mapping keys, with the full flag/width/precision grammar a
+# real format string uses (%(price).2f, %(done)3d), so a conversion isn't
+# required to sit right after the ')'. The space flag is safe here because
+# the %(name) prefix already pins the match, unlike bare printf below.
+_RX_PYNAMED = re.compile(r"%\((\w+)\)[-+0# ]*\d*(?:\.\d+)?[diouxXeEfFgGcrsa]")
 # printf: optional %2$-style argument number, then the flag/width/precision
-# forms (%-10s, %05d, %.2f) real catalogs actually use. The space flag is
-# deliberately left out of the flag class: "% off" would otherwise read as
-# a "% o" token, and a space-flagged placeholder in a locale string is far
-# rarer than a percent sign followed by a word.
-_RX_PRINTF = re.compile(r"%(\d+\$)?[-+0#]*\d*(?:\.\d+)?[sdifgeExXo]")
+# forms (%-10s, %05d, %.2f), an optional length modifier (%lu, %zd, %ll d),
+# then the conversion. The space flag is deliberately left out of the flag
+# class: "% off" would otherwise read as a "% o" token, and a space-flagged
+# placeholder in a locale string is far rarer than a percent sign followed
+# by a word.
+_RX_PRINTF = re.compile(
+    r"%(\d+\$)?[-+0#]*\d*(?:\.\d+)?(?:hh|h|ll|l|q|j|z|t|L)?[sdiufgeExXoc]"
+)
 # Bare $name requires a letter/underscore start: "$5" is money, not a
 # placeholder, and currency reordering ("5 $" in French typography) must
 # not read as a placeholder mismatch.
@@ -98,6 +109,101 @@ _RX_DOLLAR = re.compile(r"\$\{(\w+)\}|\$([A-Za-z_]\w*)")
 
 def _spans_contain(spans, m):
     return any(s <= m.start() and m.end() <= e for s, e in spans)
+
+
+# ---------------------------------------------------------------------------
+# ICU MessageFormat plural/select/selectordinal arguments
+#
+# `{count, plural, one {file} other {files}}` is a single placeholder whose
+# argument is `count` - the branch bodies (file/files) are ordinary prose to
+# be translated, not placeholders. The flat brace regex above would otherwise
+# read every `{file}`/`{files}` branch as its own token, so a correct French
+# translation ({fichier}/{fichiers}) looks like a placeholder mismatch, and
+# the identical structural keywords make it look untranslated too. The
+# scanner below pulls out just the argument name and hands the branch bodies
+# back for recursion, so nested placeholders inside a branch still count.
+# ---------------------------------------------------------------------------
+
+_RX_ICU_HEAD = re.compile(r"^\s*([A-Za-z_]\w*)\s*,\s*(?:plural|selectordinal|select)\s*,")
+
+
+def _match_brace(s, i):
+    """Index of the '}' that closes the '{' at s[i], or -1 if unbalanced."""
+    depth = 0
+    for j in range(i, len(s)):
+        if s[j] == "{":
+            depth += 1
+        elif s[j] == "}":
+            depth -= 1
+            if depth == 0:
+                return j
+    return -1
+
+
+def _icu_branch_bodies(style):
+    """The submessage bodies from an ICU plural/select style part - the text
+    inside each `key {body}` group, with the branch keys (one/other/=0)
+    dropped since they're syntax keywords, not translatable content."""
+    bodies = []
+    i = 0
+    while i < len(style):
+        if style[i] == "{":
+            j = _match_brace(style, i)
+            if j == -1:
+                break
+            bodies.append(style[i + 1:j])
+            i = j + 1
+        else:
+            i += 1
+    return bodies
+
+
+def _icu_scan(value):
+    """Find top-level ICU plural/select/selectordinal arguments in value.
+    Returns (tokens, spans, bodies): the `{argname}` token for each one, the
+    full span of each argument block (so the flat regexes skip it), and every
+    branch submessage string (so the caller can recurse for nested
+    placeholders). Simple `{name}` arguments are left to the flat brace regex."""
+    tokens, spans, bodies = [], [], []
+    i = 0
+    while i < len(value):
+        if value[i] == "{":
+            j = _match_brace(value, i)
+            if j != -1:
+                inner = value[i + 1:j]
+                m = _RX_ICU_HEAD.match(inner)
+                if m:
+                    tokens.append(f"{{{m.group(1)}}}")
+                    spans.append((i, j + 1))
+                    bodies.extend(_icu_branch_bodies(inner[m.end():]))
+                    i = j + 1
+                    continue
+        i += 1
+    return tokens, spans, bodies
+
+
+def _strip_icu_structure(value):
+    """Rewrite value with ICU plural/select scaffolding removed but branch
+    body prose kept, for the untranslated-value heuristic - a correctly
+    translated branch then differs from the base, while an untranslated copy
+    still matches."""
+    out = []
+    i = 0
+    while i < len(value):
+        if value[i] == "{":
+            j = _match_brace(value, i)
+            if j != -1:
+                inner = value[i + 1:j]
+                m = _RX_ICU_HEAD.match(inner)
+                if m:
+                    for body in _icu_branch_bodies(inner[m.end():]):
+                        out.append(_strip_icu_structure(body))
+                        out.append(" ")
+                    i = j + 1
+                    continue
+        out.append(value[i])
+        i += 1
+    return "".join(out)
 
 
 def extract_placeholders(value):
@@ -115,29 +221,46 @@ def extract_placeholders(value):
     tokens = []
     styles_hit = []
 
-    doublebrace_matches = list(_RX_DOUBLEBRACE.finditer(value))
+    # ICU plural/select args first: take the argument name as the token,
+    # exclude the whole block from the flat regexes below (so branch-body
+    # braces aren't read as their own placeholders), and recurse into each
+    # branch to pick up any nested placeholder.
+    icu_tokens, icu_spans, icu_bodies = _icu_scan(value)
+    if icu_tokens:
+        tokens += icu_tokens
+        styles_hit.append("icu")
+        for body in icu_bodies:
+            _, sub_tokens = extract_placeholders(body)
+            tokens += list(sub_tokens)
+
+    doublebrace_matches = [m for m in _RX_DOUBLEBRACE.finditer(value)
+                            if not _spans_contain(icu_spans, m)]
     if doublebrace_matches:
         tokens += [f"{{{{{m.group(1)}}}}}" for m in doublebrace_matches]
         styles_hit.append("doublebrace")
 
-    pynamed_matches = list(_RX_PYNAMED.finditer(value))
+    pynamed_matches = [m for m in _RX_PYNAMED.finditer(value)
+                        if not _spans_contain(icu_spans, m)]
     if pynamed_matches:
         tokens += [m.group(0) for m in pynamed_matches]
         styles_hit.append("pynamed")
 
-    printf_matches = list(_RX_PRINTF.finditer(value))
+    printf_matches = [m for m in _RX_PRINTF.finditer(value)
+                       if not _spans_contain(icu_spans, m)]
     if printf_matches:
         tokens += [m.group(0) for m in printf_matches]
         styles_hit.append("printf")
     printf_spans = [m.span() for m in printf_matches]
 
     dollar_matches = [m for m in _RX_DOLLAR.finditer(value)
-                       if not _spans_contain(printf_spans, m)]
+                       if not _spans_contain(printf_spans, m)
+                       and not _spans_contain(icu_spans, m)]
     if dollar_matches:
         tokens += [m.group(0) for m in dollar_matches]
         styles_hit.append("dollar")
 
-    exclude_spans = [m.span() for m in doublebrace_matches] + [m.span() for m in dollar_matches]
+    exclude_spans = ([m.span() for m in doublebrace_matches]
+                     + [m.span() for m in dollar_matches] + icu_spans)
     brace_matches = [m for m in _RX_BRACE.finditer(value)
                       if not _spans_contain(exclude_spans, m)]
     if brace_matches:
@@ -293,11 +416,20 @@ def parse_properties(text, path):
         # with a word character right after whitespace-padded punctuation
         # (e.g. "key = value") isn't mis-split on the whitespace alone.
         m = re.match(r"\s*((?:[^\\=: \t]|\\.)+)(?:\s*[=:]\s*|[ \t]+)(.*)$", full)
-        if not m:
-            i += 1
-            continue
-        key = _properties_unescape(m.group(1).strip())
-        value = _properties_unescape(m.group(2))
+        if m:
+            key = _properties_unescape(m.group(1).strip())
+            value = _properties_unescape(m.group(2))
+        else:
+            # A bare key with no separator and no value ("flag.beta" on its
+            # own line) is valid java.util.Properties syntax for a key with
+            # an empty value - record it as such so it lands in empty_values,
+            # not dropped and then mis-reported as a missing key.
+            bare = re.match(r"\s*((?:[^\\=: \t]|\\.)+)\s*$", full)
+            if not bare:
+                i += 1
+                continue
+            key = _properties_unescape(bare.group(1).strip())
+            value = ""
         out[key] = value
         i += 1
     return out
@@ -334,15 +466,41 @@ def parse_po(text, path):
         except json.JSONDecodeError:
             return raw
 
+    def starts_new_entry(line):
+        # A fresh msgctxt/msgid (not msgid_plural, which belongs to the same
+        # entry) marks a new entry; so does the comment block gettext writes
+        # ahead of one. Both only count once the current entry already has a
+        # msgstr - that's what tells them apart from the same entry's own
+        # header lines.
+        if line.startswith("msgctxt"):
+            return True
+        if line.startswith("msgid") and not line.startswith("msgid_plural"):
+            return True
+        return line.startswith("#")
+
     entry_lines = []
     entries = []
+    has_msgstr = False
     for raw_line in text.splitlines() + [""]:
         line = raw_line.strip()
-        if line == "" and entry_lines:
+        if line == "":
+            if entry_lines:
+                entries.append(entry_lines)
+                entry_lines = []
+                has_msgstr = False
+            continue
+        # gettext also delimits entries structurally, not only with blank
+        # lines: a new msgctxt/msgid (or the comment block before it) after
+        # this entry's msgstr starts the next one, so a file whose entries
+        # aren't blank-separated (msgfmt still accepts it) doesn't merge into
+        # one garbage key.
+        if entry_lines and has_msgstr and starts_new_entry(line):
             entries.append(entry_lines)
             entry_lines = []
-        elif line:
-            entry_lines.append(line)
+            has_msgstr = False
+        entry_lines.append(line)
+        if line.startswith("msgstr"):
+            has_msgstr = True
     if entry_lines:
         entries.append(entry_lines)
 
@@ -436,8 +594,8 @@ def load_locale(path, fmt=None):
 # prose to translate in the first place) doesn't get flagged at all - see
 # the ">= 3 letters of remaining content" guard in find_untranslated below.
 _STRIP_PLACEHOLDER_RX = re.compile(
-    r"\{\{[\w.]+\}\}|\{[\w.]*\}|%\(\w+\)[sdifr%]|"
-    r"%(?:\d+\$)?[-+0#]*\d*(?:\.\d+)?[sdifgeExXo]|"
+    r"\{\{[\w.]+\}\}|\{[\w.]*\}|%\(\w+\)[-+0# ]*\d*(?:\.\d+)?[diouxXeEfFgGcrsa]|"
+    r"%(?:\d+\$)?[-+0#]*\d*(?:\.\d+)?(?:hh|h|ll|l|q|j|z|t|L)?[sdiufgeExXoc]|"
     r"\$\{[\w]+\}|\$[A-Za-z_]\w*"
 )
 _STRIP_PUNCT_RX = re.compile(r"[0-9%.,()/\-+×~\"'`:;!?\s]")
@@ -447,6 +605,7 @@ def _strip_for_untranslated_check(value, do_not_translate):
     out = value
     for tok in do_not_translate:
         out = out.replace(tok, "")
+    out = _strip_icu_structure(out)
     out = _STRIP_PLACEHOLDER_RX.sub("", out)
     out = _STRIP_PUNCT_RX.sub("", out)
     return out
@@ -498,10 +657,22 @@ def check_locale(base, locale_dict, locale_name, path, fmt,
     placeholder_mismatches = []
     empty_values = []
     untranslated_values = []
+    untranslated_markers = []
 
     for key in sorted(base_keys & locale_keys, key=_key_sort):
         base_val = base[key]
         loc_val = locale_dict[key]
+
+        if loc_val.strip().startswith(UNTRANSLATED_MARKER):
+            # A key --fix inserted and nobody has translated yet. It exists in
+            # the file, so it isn't "missing," but the marker means it's not a
+            # real translation either - report it as its own hard finding so a
+            # --fix run followed by a plain run doesn't read as clean, exactly
+            # as the README's Fix mode section promises. (.po uses the fuzzy
+            # flag instead, which the parser already drops, so those show up
+            # as missing rather than here.)
+            untranslated_markers.append(key)
+            continue
 
         if base_val.strip() and not loc_val.strip():
             # Report this as "empty," not also as a placeholder mismatch -
@@ -527,7 +698,8 @@ def check_locale(base, locale_dict, locale_name, path, fmt,
         if _letter_count(base_stripped) >= 3 and base_stripped == loc_stripped:
             untranslated_values.append(key)
 
-    ok = not (missing_keys or placeholder_mismatches or empty_values)
+    ok = not (missing_keys or placeholder_mismatches or empty_values
+              or untranslated_markers)
 
     return {
         "locale": locale_name,
@@ -538,17 +710,20 @@ def check_locale(base, locale_dict, locale_name, path, fmt,
         "placeholder_mismatches": placeholder_mismatches,
         "empty_values": empty_values,
         "untranslated_values": untranslated_values,
+        "untranslated_markers": untranslated_markers,
         "ok": ok,
     }
 
 
 def is_failing(result, strict=False):
     """Whether a single locale's result should make the run exit non-zero.
-    Missing keys, placeholder mismatches, and empty values always fail.
-    Extra keys and untranslated values (a heuristic) only fail under
-    --strict, since they're much more likely to have a legitimate reason
-    behind them (a value someone intentionally left alone, a key mid-removal)."""
-    hard = bool(result["missing_keys"] or result["placeholder_mismatches"] or result["empty_values"])
+    Missing keys, placeholder mismatches, empty values, and leftover
+    [UNTRANSLATED] markers always fail. Extra keys and untranslated values
+    (a heuristic) only fail under --strict, since they're much more likely to
+    have a legitimate reason behind them (a value someone intentionally left
+    alone, a key mid-removal)."""
+    hard = bool(result["missing_keys"] or result["placeholder_mismatches"]
+                or result["empty_values"] or result["untranslated_markers"])
     if not strict:
         return hard
     return hard or bool(result["extra_keys"] or result["untranslated_values"])
@@ -609,7 +784,7 @@ def report(results):
     for r in results:
         issues = (bool(r["missing_keys"]) + bool(r["extra_keys"])
                   + bool(r["placeholder_mismatches"]) + bool(r["empty_values"])
-                  + bool(r["untranslated_values"]))
+                  + bool(r["untranslated_values"]) + bool(r["untranslated_markers"]))
         if issues == 0:
             lines.append(f"{r['locale']} ({r['path']}): clean")
             continue
@@ -618,23 +793,28 @@ def report(results):
         if r["missing_keys"]:
             lines.append(f"  missing keys ({len(r['missing_keys'])}):")
             for k in r["missing_keys"]:
-                lines.append(f"    - {k}")
+                lines.append(f"    - {_key_display(k)}")
         if r["extra_keys"]:
             lines.append(f"  extra keys ({len(r['extra_keys'])}):")
             for k in r["extra_keys"]:
-                lines.append(f"    - {k}")
+                lines.append(f"    - {_key_display(k)}")
         if r["placeholder_mismatches"]:
             lines.append(f"  placeholder mismatches ({len(r['placeholder_mismatches'])}):")
             for m in r["placeholder_mismatches"]:
-                lines.append(f"    - {m['key']}: base has {m['base']}, locale has {m['locale']}")
+                lines.append(f"    - {_key_display(m['key'])}: base has {m['base']}, "
+                              f"locale has {m['locale']}")
         if r["empty_values"]:
             lines.append(f"  empty values ({len(r['empty_values'])}):")
             for k in r["empty_values"]:
-                lines.append(f"    - {k}")
+                lines.append(f"    - {_key_display(k)}")
+        if r["untranslated_markers"]:
+            lines.append(f"  untranslated markers ({len(r['untranslated_markers'])}):")
+            for k in r["untranslated_markers"]:
+                lines.append(f"    - {_key_display(k)}")
         if r["untranslated_values"]:
             lines.append(f"  possibly untranslated ({len(r['untranslated_values'])}, heuristic):")
             for k in r["untranslated_values"]:
-                lines.append(f"    - {k}")
+                lines.append(f"    - {_key_display(k)}")
         lines.append("")
     if not any_issues:
         lines.append("")
@@ -786,12 +966,71 @@ FIX_INSERTERS = {"json": fix_missing_keys_json, "po": fix_missing_keys_po,
 
 
 def _key_display(key):
-    """Human-readable form of a check_locale key for the --fix summary - a
-    plain string for every format except .po's (msgctxt, msgid) tuples."""
+    """Human-readable form of a check_locale key for reports - a plain string
+    for every format except .po's (msgctxt, msgid) tuples."""
     if isinstance(key, tuple):
         msgctxt, msgid = key
         return f"{msgid} (msgctxt={msgctxt})"
     return key
+
+
+# gettext's own on-disk convention for a context-qualified key: msgctxt, an
+# EOT byte (U+0004), then msgid. Used so every key in --json output is a
+# string - a .po msgctxt key otherwise serialized as a [ctxt, id] array while
+# every other key was a bare string, which is awkward for anything consuming
+# the JSON.
+_PO_KEY_EOT = "\x04"
+
+
+def _key_json(key):
+    if isinstance(key, tuple):
+        msgctxt, msgid = key
+        return f"{msgctxt}{_PO_KEY_EOT}{msgid}"
+    return key
+
+
+def _results_for_json(results):
+    """A copy of the results with .po msgctxt tuple keys flattened to the
+    gettext 'msgctxt\\x04msgid' string form, so --json keys are always
+    strings. Everything else passes through unchanged."""
+    out = []
+    for r in results:
+        r = dict(r)
+        for field in ("missing_keys", "extra_keys", "empty_values",
+                      "untranslated_values", "untranslated_markers"):
+            r[field] = [_key_json(k) for k in r[field]]
+        r["placeholder_mismatches"] = [
+            {**m, "key": _key_json(m["key"])} for m in r["placeholder_mismatches"]
+        ]
+        out.append(r)
+    return out
+
+
+class NotUTF8Error(Exception):
+    """A --fix target isn't valid UTF-8. --fix rewrites the whole file, so it
+    refuses rather than replace the bytes it can't decode with U+FFFD and
+    silently corrupt real translated text."""
+    def __init__(self, path):
+        super().__init__(path)
+        self.path = path
+
+
+_UTF8_BOM = b"\xef\xbb\xbf"
+
+
+def _read_for_fix(path):
+    """Read a file --fix is about to rewrite. Decodes strictly (a lint-only
+    read tolerates junk, but a rewrite must not) and returns (text, had_bom)
+    so a UTF-8 BOM survives the round-trip. Raises NotUTF8Error, not a
+    UnicodeDecodeError, when the bytes aren't UTF-8."""
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    had_bom = raw.startswith(_UTF8_BOM)
+    body = raw[len(_UTF8_BOM):] if had_bom else raw
+    try:
+        return body.decode("utf-8"), had_bom
+    except UnicodeDecodeError:
+        raise NotUTF8Error(path)
 
 
 def apply_fix(results, base, dry_run=False):
@@ -802,21 +1041,27 @@ def apply_fix(results, base, dry_run=False):
     existing rewritten. Returns a human-readable summary string (None if
     there was nothing to insert) - the caller prints it to stderr, never
     stdout, so --json/--quiet output stays exactly the machine-readable
-    contract JSON_SCHEMA_KEYS promises, --fix or not."""
-    lines = []
+    contract JSON_SCHEMA_KEYS promises, --fix or not.
+
+    Reads and decodes every target up front, so a non-UTF-8 file (which
+    raises NotUTF8Error) stops the run before any file has been written
+    rather than after some were - all or nothing."""
+    pending = []
     for r in results:
         if not r["missing_keys"]:
             continue
-        inserter = FIX_INSERTERS[r["format"]]
-        path = r["path"]
-        with open(path, "r", encoding="utf-8-sig", errors="replace") as fh:
-            text = fh.read()
-        new_text = inserter(text, r["missing_keys"], base)
+        text, had_bom = _read_for_fix(r["path"])
+        new_text = FIX_INSERTERS[r["format"]](text, r["missing_keys"], base)
+        pending.append((r, new_text, had_bom))
+
+    lines = []
+    for r, new_text, had_bom in pending:
         if not dry_run:
-            with open(path, "w", encoding="utf-8") as fh:
-                fh.write(new_text)
+            out = (_UTF8_BOM if had_bom else b"") + new_text.encode("utf-8")
+            with open(r["path"], "wb") as fh:
+                fh.write(out)
         keys_display = ", ".join(_key_display(k) for k in r["missing_keys"])
-        lines.append(f"  {r['locale']} ({path}): "
+        lines.append(f"  {r['locale']} ({r['path']}): "
                       f"{len(r['missing_keys'])} key(s) - {keys_display}")
     if not lines:
         return None
@@ -906,7 +1151,10 @@ def main(argv=None):
     # wildcards before argv reaches us, unlike POSIX shells.
     expanded = []
     for p in args.paths:
-        if any(ch in p for ch in "*?["):
+        # Only treat an argument as a glob when it doesn't already name a real
+        # path - a directory literally called "loc[1]" exists on disk and must
+        # win over reading "[1]" as a character class that matches nothing.
+        if any(ch in p for ch in "*?[") and not os.path.exists(p):
             matches = sorted(glob.glob(p))
             if not matches:
                 print(f"translint: {p}: no files match", file=sys.stderr)
@@ -966,7 +1214,12 @@ def main(argv=None):
         # Always printed to stderr, never stdout - --json/--quiet output on
         # stdout must stay exactly the machine-readable contract regardless
         # of whether --fix had anything to insert.
-        summary = apply_fix(results, base_dict, dry_run=args.dry_run)
+        try:
+            summary = apply_fix(results, base_dict, dry_run=args.dry_run)
+        except NotUTF8Error as exc:
+            print(f"translint: {exc.path}: not UTF-8, refusing to rewrite (--fix)",
+                  file=sys.stderr)
+            return 2
         if summary:
             print(summary, file=sys.stderr)
             if not args.dry_run:
@@ -975,7 +1228,7 @@ def main(argv=None):
                     return 2
 
     if args.json:
-        print(json.dumps(results, indent=2))
+        print(json.dumps(_results_for_json(results), indent=2))
     elif args.quiet:
         failing = [r["locale"] for r in results if is_failing(r, strict=args.strict)]
         if failing:
