@@ -60,6 +60,14 @@ one non-base locale was checked). Each result has:
   legitimate, don't just leave it: either it's a project-wide token (add it to
   `--do-not-translate`) or a specific key (add it to `--allow-identical`), so the next run
   doesn't flag it again for the same reason.
+- `untranslated_markers` - a value still carrying the `[UNTRANSLATED]` marker `--fix`
+  writes. Always a failure: it means a key was inserted and never translated.
+- `locale`, `path`, `format` - which file this result is about.
+- `ok` - **hard findings only.** True when this locale has no `missing_keys`,
+  `placeholder_mismatches`, `empty_values` or `untranslated_markers`. It deliberately
+  ignores `extra_keys` and `untranslated_values`, so under `--strict` a result can be
+  `"ok": true` in a run that exits 1. Don't read `ok` as "this run passed" - use the exit
+  code for that, or check the two soft lists yourself.
 
 `--strict` also fails the exit code on `extra_keys` and `untranslated_values` (both are
 much more likely to have a legitimate reason than `missing_keys`/mismatches/empty values,

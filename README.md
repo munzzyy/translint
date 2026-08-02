@@ -123,6 +123,13 @@ translint public/locales/ --recursive --locale-from dir   # en/common.json layou
 file gets checked against. Point translint at a directory and it scans every file with a
 recognized extension; point it at specific files and it checks exactly those.
 
+Exit code is 0 when every locale is clean, 1 when translint found something to fix, and 2
+if a path couldn't be read or parsed at all - a bad-JSON error and a real lint finding
+never look the same to a script. By default only missing keys, placeholder mismatches,
+and empty values fail the run; extra keys and untranslated-value heuristic hits are
+reported but don't fail unless you pass `--strict` - both are far more likely to have a
+legitimate explanation (a key mid-removal, a brand name) than the other three.
+
 ### Directory layouts
 
 A flat directory of `en.json` / `de.json` / `fr.json` is the default and needs no flags.
@@ -141,13 +148,6 @@ Files are then grouped by namespace, so `en/common.json` is only ever compared a
 base locale; translint says which one is missing it if not. Nested namespace directories
 (`en/admin/billing.json`) work too - the namespace is the whole path below the language
 directory.
-
-Exit code is 0 when every locale is clean, 1 when translint found something to fix, and 2
-if a path couldn't be read or parsed at all - a bad-JSON error and a real lint finding
-never look the same to a script. By default only missing keys, placeholder mismatches,
-and empty values fail the run; extra keys and untranslated-value heuristic hits are
-reported but don't fail unless you pass `--strict` - both are far more likely to have a
-legitimate explanation (a key mid-removal, a brand name) than the other three.
 
 ## Formats
 
@@ -226,6 +226,35 @@ Both are also available as repeatable flags (`--allow-identical KEY`,
 `--do-not-translate TOKEN`) if you'd rather not commit a config file. translint looks for
 `.translintrc.json` in the directory you point it at; pass `--config PATH` to use a
 specific file instead.
+
+## `--json` output
+
+One object per non-base locale, in a list. These ten keys are the whole contract, and
+they don't change without a version bump:
+
+| key | what's in it |
+| --- | --- |
+| `locale` | the locale name (`de`) |
+| `path` | the file this result is about |
+| `format` | `json`, `po` or `properties` |
+| `missing_keys` | keys in the base that this file hasn't got |
+| `extra_keys` | keys here that the base hasn't got |
+| `placeholder_mismatches` | objects of `{key, base, locale}`, the token lists that differ |
+| `empty_values` | keys whose value is blank |
+| `untranslated_values` | keys whose value still matches the base (the heuristic) |
+| `untranslated_markers` | keys still carrying the `[UNTRANSLATED]` marker `--fix` writes |
+| `ok` | hard findings only, see below |
+
+`ok` is true when the locale has no `missing_keys`, `placeholder_mismatches`,
+`empty_values` or `untranslated_markers`. It ignores `extra_keys` and
+`untranslated_values` on purpose, which means **`ok` can be true in a run that exits 1**:
+under `--strict` those two fail the run and `ok` doesn't know about `--strict`. If you're
+scripting against the output, take the exit code as the verdict and use `ok` for what it
+says on the tin, or check the two soft lists yourself.
+
+A `.po` key that carried a `msgctxt` is emitted as the msgctxt, a `U+0004` byte, then
+the msgid, which is gettext's own convention, so every key in the output is a string
+rather than sometimes being a pair.
 
 ## The untranslated-value check, honestly
 
