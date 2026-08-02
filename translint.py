@@ -98,9 +98,25 @@ _RX_PYNAMED = re.compile(r"%\((\w+)\)[-+0# ]*\d*(?:\.\d+)?[diouxXeEfFgGcrsa]")
 # class: "% off" would otherwise read as a "% o" token, and a space-flagged
 # placeholder in a locale string is far rarer than a percent sign followed
 # by a word.
-_RX_PRINTF = re.compile(
-    r"%(\d+\$)?[-+0#]*\d*(?:\.\d+)?(?:hh|h|ll|l|q|j|z|t|L)?[sdiufgeExXoc]"
+#
+# The last branch is the bare form (%s, %d) and it's the only one that can
+# collide with ordinary prose, so it's the only one guarded: a "%" sitting
+# right after a digit and right before a letter, with no flag, width,
+# precision or length modifier in between, is a percentage sign. "20%off"
+# is a discount, not a "%o" octal conversion, and since placeholder
+# mismatches are a hard failure with no allowlist, reading it as one fails
+# CI on a perfectly good string. Anything that carries a flag, a width, a
+# precision, a length modifier or an argument number still matches wherever
+# it appears - "50%2$s" is a real placeholder no matter what precedes it.
+_PRINTF_RE = (
+    r"(?:"
+    r"%(?:\d+\$[-+0#]*\d*(?:\.\d+)?|[-+0#]+\d*(?:\.\d+)?|\d+(?:\.\d+)?|\.\d+)"
+    r"(?:hh|h|ll|l|q|j|z|t|L)?[sdiufgeExXoc]"
+    r"|%(?:hh|h|ll|l|q|j|z|t|L)[sdiufgeExXoc]"
+    r"|(?<![0-9])%[sdiufgeExXoc]"
+    r")"
 )
+_RX_PRINTF = re.compile(_PRINTF_RE)
 # Bare $name requires a letter/underscore start: "$5" is money, not a
 # placeholder, and currency reordering ("5 $" in French typography) must
 # not read as a placeholder mismatch.
@@ -593,9 +609,13 @@ def load_locale(path, fmt=None):
 # short value that's ALL punctuation/placeholder (and therefore has no real
 # prose to translate in the first place) doesn't get flagged at all - see
 # the ">= 3 letters of remaining content" guard in find_untranslated below.
+# The printf alternative is _PRINTF_RE itself, not a second copy of it: when
+# the two drifted apart, a string the placeholder engine read one way got
+# stripped the other way here, and the untranslated heuristic disagreed with
+# the placeholder check on the same value.
 _STRIP_PLACEHOLDER_RX = re.compile(
     r"\{\{[\w.]+\}\}|\{[\w.]*\}|%\(\w+\)[-+0# ]*\d*(?:\.\d+)?[diouxXeEfFgGcrsa]|"
-    r"%(?:\d+\$)?[-+0#]*\d*(?:\.\d+)?(?:hh|h|ll|l|q|j|z|t|L)?[sdiufgeExXoc]|"
+    + _PRINTF_RE + r"|"
     r"\$\{[\w]+\}|\$[A-Za-z_]\w*"
 )
 _STRIP_PUNCT_RX = re.compile(r"[0-9%.,()/\-+×~\"'`:;!?\s]")

@@ -143,6 +143,53 @@ def test_printf_numbered_width_precision_forms():
     assert tokens == ("%1$-10s", "%2$.2f")
 
 
+@pytest.mark.parametrize("value", [
+    "20%off",
+    "50%discount",
+    "100%",
+    "Save 20%off today",
+    "20% off",
+    "Up to 70%savings",
+])
+def test_percent_sign_in_prose_is_not_a_printf_placeholder(value):
+    # A discount string is the common case here, and a placeholder mismatch
+    # is a hard failure with no allowlist, so reading "20%off" as a "%o"
+    # octal conversion fails CI on a perfectly good string.
+    assert translint.extract_placeholders(value) == ("none", ())
+
+
+@pytest.mark.parametrize("value,tokens", [
+    ("%s items", ("%s",)),
+    ("Got %d of %d", ("%d", "%d")),
+    ("%.2f", ("%.2f",)),
+    ("%-10s", ("%-10s",)),
+    ("%05d", ("%05d",)),
+    ("%1$s %2$d", ("%1$s", "%2$d")),
+    ("%lu bytes", ("%lu",)),
+    # A digit in front only disqualifies the bare form. Anything carrying a
+    # flag, width, precision, length modifier or argument number is a real
+    # placeholder wherever it sits.
+    ("50%2$s", ("%2$s",)),
+    ("50%-10s", ("%-10s",)),
+    ("50%.2f", ("%.2f",)),
+])
+def test_real_printf_placeholders_still_extract(value, tokens):
+    style, found = translint.extract_placeholders(value)
+    assert style == "printf"
+    assert found == tokens
+
+
+def test_percent_prose_agrees_between_placeholder_and_untranslated_engines():
+    # The two regexes used to be separate copies and drifted. If the strip
+    # pass still eats "%o" out of "20%off", a German "20%Rabatt" strips to
+    # "ff" vs "Rabatt" while the placeholder engine sees no token at all.
+    base = {"promo": "20%off"}
+    loc = {"promo": "20%Rabatt"}
+    r = translint.check_locale(base, loc, "de", "de.json", "json")
+    assert r["placeholder_mismatches"] == []
+    assert translint._strip_for_untranslated_check("20%off", []) == "off"
+
+
 def test_printf_dropped_precision_token_is_a_mismatch():
     base = {"total": "Total: %.2f"}
     loc = {"total": "Insgesamt:"}
