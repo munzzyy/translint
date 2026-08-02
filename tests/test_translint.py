@@ -1516,3 +1516,155 @@ def test_properties_bare_key_categorized_as_empty_end_to_end():
         results = json.loads(out)
         assert results[0]["empty_values"] == ["flag.beta"]
         assert results[0]["missing_keys"] == []
+
+
+# ---------------------------------------------------------------------------
+# Discovery: --recursive, --locale-from dir, and --format on a directory
+# ---------------------------------------------------------------------------
+
+
+def write_tree(root, files):
+    for rel, text in files.items():
+        path = os.path.join(root, *rel.split("/"))
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(text)
+
+
+NS_TREE = {
+    "en/common.json": '{\n  "nav": {\n    "home": "Home",\n    "settings": "Settings"\n  }\n}\n',
+    "en/footer.json": '{\n  "copy": "All rights reserved"\n}\n',
+    "de/common.json": '{\n  "nav": {\n    "home": "Startseite"\n  }\n}\n',
+    "de/footer.json": '{\n  "copy": "Alle Rechte vorbehalten"\n}\n',
+}
+
+
+def test_cli_recursive_locale_from_dir_checks_the_nested_layout():
+    # public/locales/<lang>/<namespace>.json, what next-i18next and
+    # i18next-fs-backend ship by default
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, NS_TREE)
+        code, out = run_cli([d, "--base", "en", "--recursive",
+                             "--locale-from", "dir", "--json"])
+        assert code == 1
+        results = json.loads(out)
+        assert [r["locale"] for r in results] == ["de", "de"]
+        by_path = {os.path.basename(r["path"]): r for r in results}
+        assert by_path["common.json"]["missing_keys"] == ["nav.settings"]
+        # footer.json is a complete translation and must not pick up the
+        # other namespace's keys as missing or extra
+        assert by_path["footer.json"]["missing_keys"] == []
+        assert by_path["footer.json"]["extra_keys"] == []
+
+
+def test_cli_locale_from_dir_never_compares_across_namespaces():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, NS_TREE)
+        # a complete German translation of both namespaces: nothing should
+        # be reported, and in particular footer's key must not read as
+        # missing from common or extra in footer
+        write_tree(d, {"de/common.json":
+                       '{\n  "nav": {\n    "home": "Startseite",\n'
+                       '    "settings": "Einstellungen"\n  }\n}\n'})
+        code, out = run_cli([d, "--base", "en", "--recursive",
+                             "--locale-from", "dir", "--strict", "--json"])
+        assert code == 0
+        for r in json.loads(out):
+            assert r["missing_keys"] == [] and r["extra_keys"] == []
+
+
+def test_cli_locale_from_dir_works_on_explicitly_listed_files():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, NS_TREE)
+        code, out = run_cli([os.path.join(d, "en", "common.json"),
+                             os.path.join(d, "de", "common.json"),
+                             "--base", "en", "--locale-from", "dir", "--json"])
+        assert code == 1
+        results = json.loads(out)
+        assert len(results) == 1
+        assert results[0]["locale"] == "de"
+        assert results[0]["missing_keys"] == ["nav.settings"]
+
+
+def test_cli_directory_scan_is_still_non_recursive_by_default():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, NS_TREE)
+        code, out, err = run_cli_err([d, "--base", "en"])
+        assert code == 2
+        assert "no locale files found" in err
+
+
+def test_cli_recursive_alone_still_names_locales_by_stem():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {
+            "en.json": '{"a": "Hello"}',
+            "extra/de.json": '{"a": "Hallo"}',
+        })
+        code, out = run_cli([d, "--base", "en", "--recursive", "--json"])
+        assert code == 0
+        assert [r["locale"] for r in json.loads(out)] == ["de"]
+
+
+def test_cli_locale_from_dir_missing_base_names_the_namespace():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {
+            "en/common.json": '{"a": "Hello"}',
+            "de/common.json": '{"a": "Hallo"}',
+            "de/footer.json": '{"c": "Alle Rechte vorbehalten"}',
+        })
+        code, out, err = run_cli_err([d, "--base", "en", "--recursive",
+                                      "--locale-from", "dir"])
+        assert code == 2
+        assert "footer" in err and "'en'" in err
+
+
+def test_cli_fix_in_the_nested_layout_writes_into_the_right_file():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, NS_TREE)
+        footer_before = open(os.path.join(d, "de", "footer.json"), encoding="utf-8").read()
+        code, out, err = run_cli_err([d, "--base", "en", "--recursive",
+                                      "--locale-from", "dir", "--fix"])
+        assert code == 1
+        common = json.loads(open(os.path.join(d, "de", "common.json"), encoding="utf-8").read())
+        assert common["nav"]["settings"] == "[UNTRANSLATED] Settings"
+        after = open(os.path.join(d, "de", "footer.json"), encoding="utf-8").read()
+        assert after == footer_before
+
+
+def test_cli_format_flag_rescues_an_unrecognized_extension_in_a_directory():
+    # the README calls --format the escape hatch for a non-standard
+    # extension; before this it only worked for explicitly listed files and
+    # reported "no locale files found" for a whole directory of them
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {"en.lang": '{"a": "Hello", "b": "World"}',
+                       "de.lang": '{"a": "Hallo"}'})
+        code, out = run_cli([d, "--base", "en", "--format", "json", "--json"])
+        assert code == 1
+        results = json.loads(out)
+        assert results[0]["locale"] == "de"
+        assert results[0]["missing_keys"] == ["b"]
+
+
+def test_discover_skips_dotfiles_but_keeps_an_explicitly_named_one():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {"en.json": "{}", ".translintrc.json": "{}"})
+        found = [p for p, _root in translint.discover_locale_files([d])]
+        assert found == [os.path.join(d, "en.json")]
+        cfg = os.path.join(d, ".translintrc.json")
+        assert [p for p, _root in translint.discover_locale_files([cfg])] == [cfg]
+
+
+def test_discover_recursive_skips_dot_directories():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {"en.json": "{}", ".git/en.json": "{}"})
+        found = [p for p, _root in translint.discover_locale_files([d], recursive=True)]
+        assert found == [os.path.join(d, "en.json")]
+
+
+def test_locale_and_namespace_splits_a_lang_directory_layout():
+    root = os.path.join("pub", "locales")
+    path = os.path.join(root, "de", "common.json")
+    assert translint.locale_and_namespace(path, root, "dir") == ("de", "common")
+    deep = os.path.join(root, "de", "admin", "billing.json")
+    assert translint.locale_and_namespace(deep, root, "dir") == ("de", "admin/billing")
+    assert translint.locale_and_namespace(path, root, "stem") == ("common", "")

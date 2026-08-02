@@ -21,6 +21,7 @@ Usage:
   translint locales/ --allow-identical brand.name   # suppress one heuristic hit
   translint locales/ --fix                    # insert MISSING keys only, marked
   translint locales/ --fix --dry-run          # show what --fix would insert
+  translint public/locales/ --recursive --locale-from dir   # en/common.json
 
 Exit code is 0 when every locale is clean, 1 when translint found something
 to fix, and 2 if a path couldn't be read or parsed at all - so a crash and
@@ -754,17 +755,30 @@ def is_failing(result, strict=False):
 # ---------------------------------------------------------------------------
 
 
-def discover_locale_files(paths):
+def discover_locale_files(paths, recursive=False, forced_fmt=None):
     """Given a list of files and/or directories, return a sorted list of
-    locale file paths, expanding directories to every file with a
-    recognized extension in them (non-recursive - locale directories are
-    conventionally flat, and recursing risks pulling in unrelated JSON).
+    (path, root) pairs - the locale file, and the directory argument it was
+    found under. The root is what --locale-from dir measures a path against,
+    and it's the file's own directory for a file passed explicitly.
+
+    A directory expands to every file in it with a recognized extension.
+    That's non-recursive by default: locale directories are conventionally
+    flat, and recursing by default risks pulling in unrelated JSON. Pass
+    recursive=True for the locales/<lang>/<namespace>.json layout, where the
+    files are one level down.
+
+    forced_fmt is --format. Extension-based filtering is the only reason a
+    directory scan would skip a real locale file, so forcing a format drops
+    the filter and takes every regular file instead - otherwise --format,
+    documented as the escape hatch for a non-standard extension, worked for
+    explicitly listed files and silently found nothing for a directory.
+
     A file passed explicitly (not discovered via a directory) is always
     included as given, even if its name would otherwise be excluded below -
-    only directory-scan discovery applies the dotfile/config-name filter.
-    Dotfiles (.translintrc.json and friends) are skipped during discovery
-    so a config file sitting next to the locale files it configures doesn't
-    get treated as a locale itself just because it shares the extension."""
+    only directory-scan discovery applies the dotfile filter. Dotfiles
+    (.translintrc.json and friends) are skipped during discovery so a config
+    file sitting next to the locale files it configures doesn't get treated
+    as a locale itself just because it shares the extension."""
     out = []
     for p in paths:
         if os.path.isdir(p):
@@ -773,14 +787,20 @@ def discover_locale_files(paths):
             # doesn't produce a display path that mixes separators once
             # joined with a filename below.
             base_dir = os.path.normpath(p)
-            for name in sorted(os.listdir(base_dir)):
-                if name.startswith("."):
-                    continue
-                full = os.path.join(base_dir, name)
-                if os.path.isfile(full) and detect_format(full):
-                    out.append(full)
+            for dirpath, dirnames, filenames in os.walk(base_dir):
+                dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
+                for name in sorted(filenames):
+                    if name.startswith("."):
+                        continue
+                    full = os.path.join(dirpath, name)
+                    if not os.path.isfile(full):
+                        continue
+                    if forced_fmt or detect_format(full):
+                        out.append((full, base_dir))
+                if not recursive:
+                    dirnames[:] = []
         else:
-            out.append(p)
+            out.append((p, os.path.dirname(p) or "."))
     return out
 
 
@@ -788,14 +808,31 @@ def locale_name_from_path(path):
     return os.path.splitext(os.path.basename(path))[0]
 
 
-def find_base(files, base_name):
-    """Pick the base file out of a discovered file list by locale name
-    (filename stem), preferring an exact stem match. Returns None if no
-    file's stem matches base_name."""
-    for f in files:
-        if locale_name_from_path(f) == base_name:
-            return f
-    return None
+def locale_and_namespace(path, root, locale_from="stem"):
+    """Split a discovered file into (locale, namespace).
+
+    With locale_from="stem" the locale is the filename stem, the way
+    en.json / de.json directories work, and every file is in one unnamed
+    namespace so they all get compared against one base.
+
+    With locale_from="dir" the locale is the first directory below the
+    scanned root - the next-i18next / i18next-fs-backend layout,
+    public/locales/en/common.json - and the namespace is the rest of the
+    path with the extension dropped. Grouping by that namespace is what
+    keeps en/common.json compared against de/common.json and never against
+    de/footer.json."""
+    if locale_from != "dir":
+        return locale_name_from_path(path), ""
+    rel = os.path.relpath(path, root)
+    parts = rel.split(os.sep)
+    if len(parts) < 2:
+        # an explicitly listed file: its own parent directory names the
+        # locale, so translint pub/en/common.json pub/de/common.json works
+        # the same way the directory scan does
+        return os.path.basename(os.path.dirname(os.path.abspath(path))), \
+            locale_name_from_path(path)
+    namespace = "/".join(parts[1:])
+    return parts[0], os.path.splitext(namespace)[0]
 
 
 def report(results):
@@ -1279,7 +1316,16 @@ def main(argv=None):
     ap.add_argument("--base", default="en", metavar="LOCALE",
                     help="locale name (filename stem) to treat as the reference (default: en)")
     ap.add_argument("--format", choices=SUPPORTED_FORMATS, default=None,
-                    help="force a format instead of detecting from extension")
+                    help="force a format instead of detecting from extension (a directory "
+                         "scan then takes every file in the directory, not just the ones "
+                         "with a recognized extension)")
+    ap.add_argument("--recursive", action="store_true",
+                    help="scan subdirectories too (default: only the files directly "
+                         "inside the directory you point at)")
+    ap.add_argument("--locale-from", choices=("stem", "dir"), default="stem",
+                    help="where the locale name comes from: the filename stem (en.json, "
+                         "the default) or the directory holding the file (en/common.json, "
+                         "the next-i18next layout - use with --recursive)")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--strict", action="store_true",
                     help="also fail on extra keys and untranslated-value hits (default: only "
@@ -1347,70 +1393,98 @@ def main(argv=None):
         else:
             expanded.append(p)
 
-    files = discover_locale_files(expanded)
-    if not files:
+    entries = discover_locale_files(expanded, recursive=args.recursive,
+                                    forced_fmt=args.format)
+    if not entries:
         print(f"translint: no locale files found in {' '.join(args.paths)}", file=sys.stderr)
         return 2
 
-    base_path = find_base(files, args.base)
-    if base_path is None:
-        print(f"translint: no file named '{args.base}' found among: "
-              f"{', '.join(locale_name_from_path(f) for f in files)}", file=sys.stderr)
-        return 2
+    # One namespace per set of files that belong together. With the default
+    # --locale-from stem there's exactly one, holding everything discovered;
+    # with dir there's one per namespace file (common, footer, ...), each
+    # with its own base, so en/common.json is only ever diffed against
+    # de/common.json.
+    by_namespace = {}
+    for path, root in entries:
+        locale, namespace = locale_and_namespace(path, root, args.locale_from)
+        by_namespace.setdefault(namespace, []).append((locale, path))
 
-    try:
-        base_dict, _base_fmt = load_locale(base_path, fmt=args.format)
-    except (ValueError, OSError) as exc:
-        print(f"translint: {exc}", file=sys.stderr)
-        return 2
+    groups = []
+    for namespace, members in by_namespace.items():
+        base_path = next((p for loc, p in members if loc == args.base), None)
+        if base_path is None:
+            names = ", ".join(loc for loc, _ in members)
+            where = f" for namespace '{namespace}'" if namespace else ""
+            print(f"translint: no file named '{args.base}' found{where} among: {names}",
+                  file=sys.stderr)
+            return 2
+        try:
+            base_dict, _base_fmt = load_locale(base_path, fmt=args.format)
+        except (ValueError, OSError) as exc:
+            print(f"translint: {exc}", file=sys.stderr)
+            return 2
+        groups.append({"base_path": base_path, "base": base_dict, "members": members})
 
     # A plain function, not a loop inlined twice: --fix needs this exact same
     # check re-run against the files it just rewrote, so the report and exit
     # code reflect what's actually on disk afterward, not a stale pre-fix
     # snapshot. Returns None (having already printed the error) on a parse
-    # failure, same as the rest of main()'s error handling.
+    # failure, same as the rest of main()'s error handling. Each result is
+    # paired with the group it was checked against, so --fix knows which base
+    # to take an inserted value from.
     def check_all_locales():
         out = []
-        for f in files:
-            if f == base_path:
-                continue
-            try:
-                locale_dict, fmt = load_locale(f, fmt=args.format)
-            except (ValueError, OSError) as exc:
-                print(f"translint: {exc}", file=sys.stderr)
-                return None
-            out.append(check_locale(
-                base_dict, locale_dict, locale_name_from_path(f), f, fmt,
-                do_not_translate=do_not_translate, allow_identical=allow_identical,
-            ))
+        for group in groups:
+            for locale, f in group["members"]:
+                if f == group["base_path"]:
+                    continue
+                try:
+                    locale_dict, fmt = load_locale(f, fmt=args.format)
+                except (ValueError, OSError) as exc:
+                    print(f"translint: {exc}", file=sys.stderr)
+                    return None
+                out.append((group, check_locale(
+                    group["base"], locale_dict, locale, f, fmt,
+                    do_not_translate=do_not_translate, allow_identical=allow_identical,
+                )))
         return out
 
-    results = check_all_locales()
-    if results is None:
+    checked = check_all_locales()
+    if checked is None:
         return 2
 
-    if not results:
+    if not checked:
         print(f"translint: only the base locale ('{args.base}') was found, nothing to check",
               file=sys.stderr)
         return 2
+    results = [r for _, r in checked]
 
     if args.fix:
         # Always printed to stderr, never stdout - --json/--quiet output on
         # stdout must stay exactly the machine-readable contract regardless
         # of whether --fix had anything to insert.
+        summaries = []
         try:
-            summary = apply_fix(results, base_dict, dry_run=args.dry_run,
-                                base_nested=_json_file_is_nested(base_path))
+            for group in groups:
+                summary = apply_fix(
+                    [r for g, r in checked if g is group], group["base"],
+                    dry_run=args.dry_run,
+                    base_nested=_json_file_is_nested(group["base_path"]),
+                )
+                if summary:
+                    summaries.append(summary)
         except NotUTF8Error as exc:
             print(f"translint: {exc.path}: not UTF-8, refusing to rewrite (--fix)",
                   file=sys.stderr)
             return 2
+        summary = "\n".join(summaries)
         if summary:
             print(summary, file=sys.stderr)
             if not args.dry_run:
-                results = check_all_locales()
-                if results is None:
+                checked = check_all_locales()
+                if checked is None:
                     return 2
+                results = [r for _, r in checked]
 
     if args.json:
         print(json.dumps(_results_for_json(results), indent=2))

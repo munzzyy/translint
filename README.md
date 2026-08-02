@@ -115,13 +115,32 @@ translint locales/ --allow-identical brand.name   # suppress one heuristic false
 translint locales/*.json --base en          # globs work even on Windows shells
 translint locales/ --fix --dry-run          # preview what --fix would insert
 translint locales/ --fix                    # insert missing keys, loudly marked
+translint public/locales/ --recursive --locale-from dir   # en/common.json layout
 ```
 
 `--base` (default `en`) is the locale name - the filename stem, so `en` means `en.json`,
 `en.po`, or `en.properties`, whichever is present - that every other discovered locale
 file gets checked against. Point translint at a directory and it scans every file with a
-recognized extension (non-recursive); point it at specific files and it checks exactly
-those.
+recognized extension; point it at specific files and it checks exactly those.
+
+### Directory layouts
+
+A flat directory of `en.json` / `de.json` / `fr.json` is the default and needs no flags.
+
+For the other common layout, `public/locales/<lang>/<namespace>.json` (next-i18next,
+react-i18next, i18next-fs-backend), pass both `--recursive`, so the scan descends into the
+language directories, and `--locale-from dir`, so the locale name comes from the directory
+rather than the filename:
+
+```bash
+translint public/locales/ --recursive --locale-from dir --base en
+```
+
+Files are then grouped by namespace, so `en/common.json` is only ever compared against
+`de/common.json`, never against `de/footer.json`. Every namespace needs a file for the
+base locale; translint says which one is missing it if not. Nested namespace directories
+(`en/admin/billing.json`) work too - the namespace is the whole path below the language
+directory.
 
 Exit code is 0 when every locale is clean, 1 when translint found something to fix, and 2
 if a path couldn't be read or parsed at all - a bad-JSON error and a real lint finding
@@ -132,7 +151,10 @@ legitimate explanation (a key mid-removal, a brand name) than the other three.
 
 ## Formats
 
-Auto-detected by extension, or forced with `--format {json,po,properties}`:
+Auto-detected by extension, or forced with `--format {json,po,properties}`. Forcing a
+format also turns off the extension filter on a directory scan, so a directory of
+`en.lang` / `de.lang` files gets read as the format you named instead of coming back
+empty:
 
 - **JSON** - both nested objects (`{"app": {"title": "..."}}`) and flat dot-namespaced
   keys (`{"app.title": "..."}`) are supported; nested files get flattened to dotted keys
@@ -295,7 +317,9 @@ locale would make the comparison meaningless.
 ```
 
 Fails the job the same way the CLI's exit code does. `strict: "true"` also fails on extra
-keys and untranslated-value hits, not just missing keys/mismatches/empty values.
+keys and untranslated-value hits, not just missing keys/mismatches/empty values. The other
+inputs are `format`, `recursive`, `locale-from` and `python-version`; the nested layout is
+`recursive: "true"` plus `locale-from: dir`.
 
 ## What it does NOT do
 
@@ -315,9 +339,10 @@ keys and untranslated-value hits, not just missing keys/mismatches/empty values.
 - **It doesn't validate translation quality.** A translation that's grammatically wrong,
   culturally off, or just bad prose passes every check here as long as the keys, tokens,
   and non-empty-ness line up. That's a different problem than the one this tool solves.
-- **Non-recursive directory scan.** Pointing translint at a directory checks the files
-  directly inside it, not subdirectories. Locale directories are conventionally flat; list
-  files explicitly if yours isn't.
+- **Directory scans are flat unless you ask.** Pointing translint at a directory checks
+  the files directly inside it. Pass `--recursive` (with `--locale-from dir` for the
+  `en/common.json` layout) to descend into subdirectories - see
+  [Directory layouts](#directory-layouts).
 
 ## License
 

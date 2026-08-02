@@ -21,6 +21,14 @@ inputs:
     description: Force a format (json/po/properties) instead of detecting from extension.
     required: false
     default: ""
+  recursive:
+    description: Scan subdirectories too, not just the files directly inside the directory.
+    required: false
+    default: "false"
+  locale-from:
+    description: Where the locale name comes from - "stem" (en.json, the default) or "dir" (en/common.json, the next-i18next layout - use with recursive).
+    required: false
+    default: "stem"
   python-version:
     description: Python version to run translint with.
     required: false
@@ -38,6 +46,8 @@ runs:
         TL_BASE: ${{ inputs.base }}
         TL_STRICT: ${{ inputs.strict }}
         TL_FORMAT: ${{ inputs.format }}
+        TL_RECURSIVE: ${{ inputs.recursive }}
+        TL_LOCALE_FROM: ${{ inputs.locale-from }}
         TL_SCRIPT: ${{ github.action_path }}/translint.py
       run: |
         set -e
@@ -47,6 +57,12 @@ runs:
         fi
         if [ -n "$TL_FORMAT" ]; then
           args+=(--format "$TL_FORMAT")
+        fi
+        if [ "$TL_RECURSIVE" = "true" ]; then
+          args+=(--recursive)
+        fi
+        if [ -n "$TL_LOCALE_FROM" ]; then
+          args+=(--locale-from "$TL_LOCALE_FROM")
         fi
         # $TL_PATHS stays unquoted: the input is a space-separated list.
         python "$TL_SCRIPT" "${args[@]}" $TL_PATHS
