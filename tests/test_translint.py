@@ -1418,18 +1418,19 @@ def test_untranslated_marker_fails_even_without_strict():
 
 def test_cli_fix_refuses_non_utf8_file_and_leaves_it_untouched():
     with tempfile.TemporaryDirectory() as d:
-        en_path = os.path.join(d, "en.properties")
-        fr_path = os.path.join(d, "fr.properties")
+        en_path = os.path.join(d, "en.json")
+        fr_path = os.path.join(d, "fr.json")
         with open(en_path, "w", encoding="utf-8") as fh:
-            fh.write("a=Hello\nb=World\n")
-        # Latin-1 "Déjà vu" - not valid UTF-8
+            fh.write('{"a": "Hello", "b": "World"}')
+        # Latin-1 "Déjà vu" - not valid UTF-8, and JSON has no legacy
+        # encoding to fall back to the way .properties does
         with open(fr_path, "wb") as fh:
-            fh.write(b"a=D\xe9j\xe0 vu\n")
+            fh.write(b'{"a": "D\xe9j\xe0 vu"}')
         before = open(fr_path, "rb").read()
 
         code, out, err = run_cli_err([d, "--base", "en", "--fix"])
         assert code == 2
-        assert "not UTF-8" in err
+        assert "refusing to rewrite" in err
         assert open(fr_path, "rb").read() == before  # byte-for-byte untouched
 
 
@@ -1668,3 +1669,93 @@ def test_locale_and_namespace_splits_a_lang_directory_layout():
     deep = os.path.join(root, "de", "admin", "billing.json")
     assert translint.locale_and_namespace(deep, root, "dir") == ("de", "admin/billing")
     assert translint.locale_and_namespace(path, root, "stem") == ("common", "")
+
+
+# ---------------------------------------------------------------------------
+# Encoding: .properties is ISO-8859-1 by specification, --encoding for the rest
+# ---------------------------------------------------------------------------
+
+
+def test_latin1_properties_are_read_as_latin1_not_mojibake():
+    # "Année" vs "Annèe" - two different words whose accented bytes both
+    # decode to U+FFFD under UTF-8, which made them compare equal and
+    # reported a correct translation as possibly untranslated
+    with tempfile.TemporaryDirectory() as d:
+        en_path = os.path.join(d, "en.properties")
+        fr_path = os.path.join(d, "fr.properties")
+        with open(en_path, "wb") as fh:
+            fh.write(b"a=Ann\xe9e\n")
+        with open(fr_path, "wb") as fh:
+            fh.write(b"a=Ann\xe8e\n")
+
+        code, out, err = run_cli_err([d, "--base", "en", "--strict", "--json"])
+        assert code == 0
+        results = json.loads(out)
+        assert results[0]["untranslated_values"] == []
+        assert "iso-8859-1" in err  # the fallback is stated, not silent
+
+
+def test_latin1_json_degrades_loudly_rather_than_silently():
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "en.json"), "wb") as fh:
+            fh.write(b'{"a": "Hello"}')
+        with open(os.path.join(d, "fr.json"), "wb") as fh:
+            fh.write(b'{"a": "Ann\xe9e"}')
+        code, out, err = run_cli_err([d, "--base", "en"])
+        assert "not valid UTF-8" in err
+        assert "U+FFFD" in err
+
+
+def test_encoding_flag_decodes_the_named_encoding():
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "en.json"), "wb") as fh:
+            fh.write('{"a": "Year", "b": "Month"}'.encode("utf-8"))
+        with open(os.path.join(d, "fr.json"), "wb") as fh:
+            fh.write('{"a": "Année", "b": "Mois"}'.encode("latin-1"))
+        code, out = run_cli([d, "--base", "en", "--encoding", "latin-1", "--json"])
+        assert code == 0
+        assert json.loads(out)[0]["missing_keys"] == []
+
+
+def test_unknown_encoding_errors_cleanly():
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "en.json"), "w", encoding="utf-8") as fh:
+            fh.write('{"a": "Hello"}')
+        with open(os.path.join(d, "fr.json"), "w", encoding="utf-8") as fh:
+            fh.write('{"a": "Bonjour"}')
+        code, out, err = run_cli_err([d, "--base", "en", "--encoding", "not-a-codec"])
+        assert code == 2
+        assert "unknown encoding" in err
+
+
+def test_cli_fix_round_trips_a_latin1_properties_file():
+    with tempfile.TemporaryDirectory() as d:
+        en_path = os.path.join(d, "en.properties")
+        fr_path = os.path.join(d, "fr.properties")
+        with open(en_path, "wb") as fh:
+            fh.write(b"a=Ann\xe9e\nb=Month\n")
+        with open(fr_path, "wb") as fh:
+            fh.write(b"a=Ann\xe8e\n")
+
+        code, out, err = run_cli_err([d, "--base", "en", "--fix"])
+        assert code == 1  # the inserted marker is itself a finding
+        raw = open(fr_path, "rb").read()
+        assert raw.startswith(b"a=Ann\xe8e\n")  # existing line byte-for-byte
+        assert b"\xef\xbf\xbd" not in raw  # no U+FFFD written back in
+        assert raw.decode("iso-8859-1").splitlines()[-1] == "b=[UNTRANSLATED] Month"
+
+
+def test_cli_fix_refuses_when_the_value_will_not_fit_the_file_encoding():
+    with tempfile.TemporaryDirectory() as d:
+        en_path = os.path.join(d, "en.properties")
+        fr_path = os.path.join(d, "fr.properties")
+        with open(en_path, "w", encoding="utf-8") as fh:
+            fh.write("a=Hello\nb=月\n")  # a base value latin-1 can't hold
+        with open(fr_path, "wb") as fh:
+            fh.write(b"a=Ann\xe8e\n")
+        before = open(fr_path, "rb").read()
+
+        code, out, err = run_cli_err([d, "--base", "en", "--fix"])
+        assert code == 2
+        assert "refusing to rewrite" in err
+        assert open(fr_path, "rb").read() == before

@@ -168,6 +168,21 @@ empty:
 - **Java .properties** - `key=value` or `key:value`, comments (`#`/`!`), and backslash
   line continuations.
 
+### Encoding
+
+Locale files are read as UTF-8 (a byte-order mark is tolerated and preserved by `--fix`).
+
+`java.util.Properties.load(InputStream)` is ISO-8859-1 by specification, and plenty of
+pre-Java-9 resource bundles are still written that way, so a `.properties` file that
+isn't valid UTF-8 is re-read as ISO-8859-1 and `--fix` writes it back in the same
+encoding. translint prints a line to stderr naming the file when it does that; it never
+falls back quietly.
+
+`--encoding ENC` names the encoding yourself, for anything else. Where translint has to
+substitute U+FFFD for bytes it can't decode, it says so on stderr rather than reporting
+on text it knows is mangled: two words that differ only in an accent both decode to
+U+FFFD, compare equal, and turn a correct translation into an "untranslated" finding.
+
 ## Placeholder styles
 
 translint detects five interpolation styles and diffs the tokens as a multiset. A

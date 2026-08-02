@@ -583,19 +583,62 @@ def detect_format(path):
     return EXT_TO_FORMAT.get(ext)
 
 
-def load_locale(path, fmt=None):
+# java.util.Properties.load(InputStream) is ISO-8859-1 by specification, and
+# pre-Java-9 resource bundles written that way are still in service. Reading
+# one as UTF-8 turns every accented byte into U+FFFD, which makes two
+# genuinely different words compare equal and reports a correct translation
+# as "possibly untranslated" - on top of printing an unreadable report.
+PROPERTIES_LEGACY_ENCODING = "iso-8859-1"
+
+
+def _warn(message):
+    print(message, file=sys.stderr)
+
+
+def decode_locale_bytes(raw, path, fmt, encoding=None, warn=_warn):
+    """Decode a locale file's bytes to text, saying out loud when the
+    decode wasn't clean. A silent U+FFFD substitution reads downstream as
+    real content, so every degraded path here prints what it did and why.
+
+    With no --encoding: UTF-8 (BOM tolerated), then for .properties a
+    fall back to ISO-8859-1, which is what the format actually specifies."""
+    if encoding:
+        try:
+            return raw.decode(encoding), encoding
+        except LookupError:
+            raise ValueError(f"{path}: unknown encoding '{encoding}'")
+        except UnicodeDecodeError:
+            warn(f"translint: {path}: not valid {encoding}, unreadable bytes "
+                 f"replaced with U+FFFD - findings on this file may be wrong")
+            return raw.decode(encoding, errors="replace"), encoding
+    try:
+        return raw.decode("utf-8-sig"), "utf-8"
+    except UnicodeDecodeError:
+        pass
+    if fmt == "properties":
+        warn(f"translint: {path}: not valid UTF-8, read as {PROPERTIES_LEGACY_ENCODING} "
+             f"(java.util.Properties' own encoding) - pass --encoding to override")
+        return raw.decode(PROPERTIES_LEGACY_ENCODING), PROPERTIES_LEGACY_ENCODING
+    warn(f"translint: {path}: not valid UTF-8, unreadable bytes replaced with U+FFFD "
+         f"- findings on this file may be wrong, pass --encoding to name its encoding")
+    return raw.decode("utf-8-sig", errors="replace"), "utf-8"
+
+
+def load_locale(path, fmt=None, encoding=None):
     """Read and parse a locale file. fmt overrides extension-based
-    detection. Raises ValueError with a plain message (no traceback) on an
-    unrecognized extension or a parse failure, so main() can report it and
-    exit 2 instead of crashing."""
+    detection, encoding overrides the decode. Raises ValueError with a
+    plain message (no traceback) on an unrecognized extension, an unknown
+    encoding, or a parse failure, so main() can report it and exit 2
+    instead of crashing."""
     fmt = fmt or detect_format(path)
     if fmt not in PARSERS:
         raise ValueError(
             f"{path}: can't detect format from extension, pass --format "
             f"({'/'.join(SUPPORTED_FORMATS)})"
         )
-    with open(path, "r", encoding="utf-8-sig", errors="replace") as fh:
-        text = fh.read()
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    text, _enc = decode_locale_bytes(raw, path, fmt, encoding=encoding)
     return PARSERS[fmt](text, path), fmt
 
 
@@ -1225,33 +1268,60 @@ def _json_file_is_nested(path):
 
 
 class NotUTF8Error(Exception):
-    """A --fix target isn't valid UTF-8. --fix rewrites the whole file, so it
+    """A --fix target doesn't decode. --fix rewrites the whole file, so it
     refuses rather than replace the bytes it can't decode with U+FFFD and
     silently corrupt real translated text."""
-    def __init__(self, path):
+    def __init__(self, path, encoding="utf-8"):
         super().__init__(path)
         self.path = path
+        self.encoding = encoding
+
+
+class FixEncodeError(Exception):
+    """The value --fix wants to insert has characters the file's own
+    encoding can't represent. Raised before anything is written."""
+    def __init__(self, path, encoding):
+        super().__init__(path)
+        self.path = path
+        self.encoding = encoding
 
 
 _UTF8_BOM = b"\xef\xbb\xbf"
 
 
-def _read_for_fix(path):
-    """Read a file --fix is about to rewrite. Decodes strictly (a lint-only
-    read tolerates junk, but a rewrite must not) and returns (text, had_bom)
-    so a UTF-8 BOM survives the round-trip. Raises NotUTF8Error, not a
-    UnicodeDecodeError, when the bytes aren't UTF-8."""
+def _read_for_fix(path, fmt=None, encoding=None):
+    """Read a file --fix is about to rewrite. Returns (text, had_bom,
+    encoding) so both a UTF-8 BOM and the file's encoding survive the
+    round-trip.
+
+    Decodes strictly: a lint-only read tolerates junk, but a rewrite must
+    not, so a file that isn't valid UTF-8 raises NotUTF8Error rather than
+    getting its unreadable bytes replaced and written back. The two ways
+    out of that are --encoding, and .properties, which is ISO-8859-1 by
+    specification and so is read and written back as ISO-8859-1."""
     with open(path, "rb") as fh:
         raw = fh.read()
     had_bom = raw.startswith(_UTF8_BOM)
     body = raw[len(_UTF8_BOM):] if had_bom else raw
+    if encoding:
+        try:
+            return body.decode(encoding), had_bom, encoding
+        except LookupError:
+            raise ValueError(f"{path}: unknown encoding '{encoding}'")
+        except UnicodeDecodeError:
+            raise NotUTF8Error(path, encoding)
     try:
-        return body.decode("utf-8"), had_bom
+        return body.decode("utf-8"), had_bom, "utf-8"
     except UnicodeDecodeError:
-        raise NotUTF8Error(path)
+        if fmt == "properties":
+            _warn(f"translint: {path}: not valid UTF-8, read and rewritten as "
+                  f"{PROPERTIES_LEGACY_ENCODING} (java.util.Properties' own encoding)")
+            return (body.decode(PROPERTIES_LEGACY_ENCODING), had_bom,
+                    PROPERTIES_LEGACY_ENCODING)
+        raise NotUTF8Error(path, "utf-8")
 
 
-def apply_fix(results, base, dry_run=False, base_nested=None):
+def apply_fix(results, base, dry_run=False, base_nested=None, encoding=None):
     """Insert missing keys for every locale result that has any, using the
     format-appropriate inserter above. Reads and (unless dry_run) rewrites
     each affected file directly - the one place in translint that writes
@@ -1261,24 +1331,28 @@ def apply_fix(results, base, dry_run=False, base_nested=None):
     stdout, so --json/--quiet output stays exactly the machine-readable
     contract JSON_SCHEMA_KEYS promises, --fix or not.
 
-    Reads and decodes every target up front, so a non-UTF-8 file (which
-    raises NotUTF8Error) stops the run before any file has been written
-    rather than after some were - all or nothing."""
+    Reads, rewrites and re-encodes every target up front, so a file that
+    won't decode (NotUTF8Error) or whose encoding can't hold the inserted
+    value (FixEncodeError) stops the run before anything has been written
+    rather than after some files were - all or nothing."""
     pending = []
     for r in results:
         if not r["missing_keys"]:
             continue
-        text, had_bom = _read_for_fix(r["path"])
+        text, had_bom, enc = _read_for_fix(r["path"], fmt=r["format"], encoding=encoding)
         # Only the JSON inserter has a shape to match, so only it takes the
         # base file's nesting as a tiebreak.
         extra = {"base_nested": base_nested} if r["format"] == "json" else {}
         new_text = FIX_INSERTERS[r["format"]](text, r["missing_keys"], base, **extra)
-        pending.append((r, new_text, had_bom))
+        try:
+            body = new_text.encode(enc)
+        except UnicodeEncodeError:
+            raise FixEncodeError(r["path"], enc)
+        pending.append((r, (_UTF8_BOM if had_bom else b"") + body))
 
     lines = []
-    for r, new_text, had_bom in pending:
+    for r, out in pending:
         if not dry_run:
-            out = (_UTF8_BOM if had_bom else b"") + new_text.encode("utf-8")
             with open(r["path"], "wb") as fh:
                 fh.write(out)
         keys_display = ", ".join(_key_display(k) for k in r["missing_keys"])
@@ -1319,6 +1393,10 @@ def main(argv=None):
                     help="force a format instead of detecting from extension (a directory "
                          "scan then takes every file in the directory, not just the ones "
                          "with a recognized extension)")
+    ap.add_argument("--encoding", metavar="ENC", default=None,
+                    help="decode locale files with this encoding instead of UTF-8 "
+                         "(a .properties file that isn't valid UTF-8 already falls back "
+                         "to ISO-8859-1, the encoding the format specifies)")
     ap.add_argument("--recursive", action="store_true",
                     help="scan subdirectories too (default: only the files directly "
                          "inside the directory you point at)")
@@ -1419,7 +1497,8 @@ def main(argv=None):
                   file=sys.stderr)
             return 2
         try:
-            base_dict, _base_fmt = load_locale(base_path, fmt=args.format)
+            base_dict, _base_fmt = load_locale(base_path, fmt=args.format,
+                                               encoding=args.encoding)
         except (ValueError, OSError) as exc:
             print(f"translint: {exc}", file=sys.stderr)
             return 2
@@ -1439,7 +1518,8 @@ def main(argv=None):
                 if f == group["base_path"]:
                     continue
                 try:
-                    locale_dict, fmt = load_locale(f, fmt=args.format)
+                    locale_dict, fmt = load_locale(f, fmt=args.format,
+                                                   encoding=args.encoding)
                 except (ValueError, OSError) as exc:
                     print(f"translint: {exc}", file=sys.stderr)
                     return None
@@ -1470,12 +1550,22 @@ def main(argv=None):
                     [r for g, r in checked if g is group], group["base"],
                     dry_run=args.dry_run,
                     base_nested=_json_file_is_nested(group["base_path"]),
+                    encoding=args.encoding,
                 )
                 if summary:
                     summaries.append(summary)
         except NotUTF8Error as exc:
-            print(f"translint: {exc.path}: not UTF-8, refusing to rewrite (--fix)",
+            print(f"translint: {exc.path}: not valid {exc.encoding}, refusing to "
+                  f"rewrite (--fix) - pass --encoding to name the file's encoding",
                   file=sys.stderr)
+            return 2
+        except FixEncodeError as exc:
+            print(f"translint: {exc.path}: the base value for a missing key has "
+                  f"characters {exc.encoding} can't hold, refusing to rewrite (--fix) "
+                  f"- convert the file to UTF-8 first", file=sys.stderr)
+            return 2
+        except ValueError as exc:
+            print(f"translint: {exc}", file=sys.stderr)
             return 2
         summary = "\n".join(summaries)
         if summary:
