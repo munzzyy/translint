@@ -901,17 +901,91 @@ def test_fix_json_only_appends_every_original_line_stays_verbatim():
     assert new_lines[-1] == old_lines[-1]  # closing "}"
 
 
-def test_fix_json_missing_flat_key_is_functionally_identical_to_nesting():
-    # a missing "nav.settings" gets appended as a flat top-level key even
-    # in a file that nests everything else - flatten_json() treats a flat
-    # dotted key and a nested path the same way, which is exactly why this
-    # is safe (see fix_missing_keys_json's docstring)
+def test_fix_json_nested_key_lands_inside_the_matching_object():
+    # a literal top-level "nav.settings" member is invisible to i18next,
+    # vue-i18n and every other runtime that walks the nested object for
+    # t("nav.settings"), so a nested file has to get a nested member
     text = '{\n  "nav": {\n    "home": "Home"\n  }\n}\n'
     base = {"nav.home": "Home", "nav.settings": "Settings"}
     new_text = translint.fix_missing_keys_json(text, ["nav.settings"], base)
+    data = json.loads(new_text)
+    assert "nav.settings" not in data
+    assert data["nav"]["settings"] == "[UNTRANSLATED] Settings"
     assert translint.parse_json(new_text, "x.json") == {
         "nav.home": "Home", "nav.settings": "[UNTRANSLATED] Settings",
     }
+
+
+def test_fix_json_nested_insert_leaves_every_other_line_verbatim():
+    text = '{\n  "nav": {\n    "home": "Home"\n  },\n  "title": "Shop"\n}\n'
+    base = {"nav.home": "Home", "nav.settings": "Settings", "title": "Shop"}
+    new_text = translint.fix_missing_keys_json(text, ["nav.settings"], base)
+    assert new_text == (
+        '{\n'
+        '  "nav": {\n'
+        '    "home": "Home",\n'
+        '    "settings": "[UNTRANSLATED] Settings"\n'
+        '  },\n'
+        '  "title": "Shop"\n'
+        '}\n'
+    )
+
+
+def test_fix_json_creates_intermediate_objects_for_a_missing_branch():
+    text = '{\n  "nav": {\n    "home": "Home"\n  }\n}\n'
+    base = {"nav.home": "Home", "nav.menu.file.open": "Open"}
+    new_text = translint.fix_missing_keys_json(text, ["nav.menu.file.open"], base)
+    data = json.loads(new_text)
+    assert data["nav"]["menu"]["file"]["open"] == "[UNTRANSLATED] Open"
+
+
+def test_fix_json_two_keys_under_one_new_parent_share_that_object():
+    text = '{\n  "nav": {\n    "home": "Home"\n  }\n}\n'
+    base = {"nav.home": "Home", "nav.menu.new": "New", "nav.menu.open": "Open"}
+    new_text = translint.fix_missing_keys_json(
+        text, ["nav.menu.new", "nav.menu.open"], base
+    )
+    data = json.loads(new_text)
+    assert data["nav"]["menu"] == {
+        "new": "[UNTRANSLATED] New", "open": "[UNTRANSLATED] Open",
+    }
+
+
+def test_fix_json_keys_for_several_objects_in_one_pass():
+    text = ('{\n  "nav": {\n    "home": "Home"\n  },\n'
+            '  "checkout": {\n    "pay": "Pay"\n  }\n}\n')
+    base = {"nav.home": "Home", "nav.settings": "Settings",
+            "checkout.pay": "Pay", "checkout.done": "Done"}
+    new_text = translint.fix_missing_keys_json(
+        text, ["checkout.done", "nav.settings"], base
+    )
+    data = json.loads(new_text)
+    assert data["nav"]["settings"] == "[UNTRANSLATED] Settings"
+    assert data["checkout"]["done"] == "[UNTRANSLATED] Done"
+    assert data["nav"]["home"] == "Home" and data["checkout"]["pay"] == "Pay"
+
+
+def test_fix_json_flat_file_keeps_getting_flat_keys():
+    text = '{\n  "nav.home": "Startseite"\n}\n'
+    base = {"nav.home": "Home", "nav.settings": "Settings"}
+    new_text = translint.fix_missing_keys_json(text, ["nav.settings"], base)
+    data = json.loads(new_text)
+    assert data == {"nav.home": "Startseite", "nav.settings": "[UNTRANSLATED] Settings"}
+
+
+def test_fix_json_shapeless_file_follows_the_base_shape():
+    # an empty locale file has no shape to read, so the base decides -
+    # otherwise a brand new de.json next to a nested en.json gets flat keys
+    # the app can't resolve
+    base = {"nav.settings": "Settings"}
+    nested = translint.fix_missing_keys_json(
+        "{}\n", ["nav.settings"], base, base_nested=True
+    )
+    assert json.loads(nested) == {"nav": {"settings": "[UNTRANSLATED] Settings"}}
+    flat = translint.fix_missing_keys_json(
+        "{}\n", ["nav.settings"], base, base_nested=False
+    )
+    assert json.loads(flat) == {"nav.settings": "[UNTRANSLATED] Settings"}
 
 
 def test_fix_json_multiple_missing_keys_in_one_pass():
@@ -1039,6 +1113,38 @@ def test_cli_fix_dry_run_writes_nothing_but_reports_what_it_would_insert():
         assert after == before  # byte-for-byte unchanged on disk
         assert "would insert" in err
         assert "[UNTRANSLATED]" not in after  # confirms it really wasn't written
+
+
+def test_cli_fix_on_a_nested_file_survives_the_translator():
+    # the whole failure this guards: --fix used to write a flat
+    # "nav.settings" member next to the "nav" object. translint read it as
+    # fixed, the translator replaced the marker with a real translation,
+    # and the app still had no string at nav.settings - a missing key the
+    # tool had turned invisible to itself.
+    with tempfile.TemporaryDirectory() as d:
+        en_path = os.path.join(d, "en.json")
+        de_path = os.path.join(d, "de.json")
+        with open(en_path, "w", encoding="utf-8") as fh:
+            fh.write('{\n  "nav": {\n    "home": "Home",\n    "settings": "Settings"\n  }\n}\n')
+        with open(de_path, "w", encoding="utf-8") as fh:
+            fh.write('{\n  "nav": {\n    "home": "Startseite"\n  }\n}\n')
+
+        code, out, err = run_cli_err([d, "--base", "en", "--fix"])
+        assert code == 1  # the marker itself is a finding
+
+        written = json.loads(open(de_path, encoding="utf-8").read())
+        assert "nav.settings" not in written
+        assert written["nav"]["settings"] == "[UNTRANSLATED] Settings"
+
+        # now do what a translator does, and check the run is honestly clean
+        text = open(de_path, encoding="utf-8").read()
+        with open(de_path, "w", encoding="utf-8") as fh:
+            fh.write(text.replace("[UNTRANSLATED] Settings", "Einstellungen"))
+        code, out, err = run_cli_err([d, "--base", "en"])
+        assert code == 0
+        assert json.loads(open(de_path, encoding="utf-8").read())["nav"]["settings"] == (
+            "Einstellungen"
+        )
 
 
 def test_cli_fix_inserts_missing_key_minimal_diff():

@@ -252,11 +252,18 @@ What it will never do, on purpose:
   absent key gets written.
 - **Never reformat the file.** Every existing line stays exactly as it was (aside from a
   trailing comma added to what was previously the last JSON member, since valid JSON
-  requires one once a sibling follows it). New keys are appended - as a new flat
-  `"key.path"` member for JSON (functionally identical to nesting it, since translint
-  flattens both the same way when it checks - see the [Formats](#formats) section), a new
-  line for `.properties`, a new blank-line-separated entry for `.po` - so the diff a fix
-  produces is exactly the new key(s) and nothing else.
+  requires one once a sibling follows it). A new key goes in as one more line for
+  `.properties` and one more blank-line-separated entry for `.po`; for JSON it goes into
+  the object its path names, so the diff a fix produces is exactly the new key(s) and
+  nothing else.
+
+A JSON key is written in the shape the file already uses. In a nested file, `nav.settings`
+is inserted into the `nav` object, creating any intermediate objects it needs; in a flat,
+dot-namespaced file it's written as a top-level `"nav.settings"` member. translint reads
+both the same way (see [Formats](#formats)), but i18next, vue-i18n and the rest walk into
+the nested object for `t("nav.settings")` and never see a literal top-level key with a dot
+in it, so writing the wrong shape would hand you a string the app still can't find. An
+empty locale file has no shape of its own, so it follows the base file's.
 
 `--dry-run` only makes sense alongside `--fix`; it prints the same summary but writes
 nothing, so you can see exactly what would land before it does.
