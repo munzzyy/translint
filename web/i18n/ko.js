@@ -76,7 +76,7 @@ export default {
   "limits.noTranslationQuality":
     "아무것도 번역하지 않고, 번역 품질도 검증하지 않습니다 - 오직 구조만 봅니다: 키, 플레이스홀더, 값이 비어 있지 않은지 여부.",
   "limits.nonRecursive":
-    "비재귀적 디렉터리 스캔입니다. 디렉터리를 가리키면 그 안에 바로 있는 파일만 검사하고, 하위 디렉터리는 검사하지 않습니다.",
+    "디렉터리 스캔은 기본적으로 한 단계만 봅니다. 하위 디렉터리까지 보려면 --recursive를, en/common.json 구조라면 --locale-from dir도 함께 지정하세요.",
 
-  "footer.license": "Prosperity Public License 3.0.0 - 비상업적 용도로 자유롭게 사용 가능.",
+  "footer.license": "MIT 라이선스 - 상업적 용도를 포함해 자유롭게 사용, 수정, 배포할 수 있습니다.",
 };

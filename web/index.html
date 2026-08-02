@@ -66,7 +66,7 @@
 
 <header class="site-header">
   <div class="wrap site-header__inner">
-    <p class="wordmark">translint<span class="wordmark__version">v0.4.0</span></p>
+    <p class="wordmark">translint<span class="wordmark__version">v0.5.0</span></p>
     <nav class="site-nav" aria-label="Site" data-i18n-attr="aria-label:nav.ariaLabel">
       <div class="lang-picker">
         <label for="lang-select" data-i18n="lang.switcherLabel">Language</label>
@@ -147,7 +147,7 @@
 
   <section class="wrap" id="install" aria-labelledby="install-h">
     <h2 id="install-h" data-i18n="install.heading">Install</h2>
-    <pre dir="ltr"><code>pip install git+https://github.com/munzzyy/translint</code></pre>
+    <pre dir="ltr"><code>pipx install git+https://github.com/munzzyy/translint</code></pre>
     <p data-i18n="install.altIntro">Or skip installing it, since it's one file with no dependencies:</p>
     <pre dir="ltr"><code>curl -LO https://raw.githubusercontent.com/munzzyy/translint/main/translint.py
 python translint.py --help</code></pre>
@@ -160,7 +160,10 @@ translint locales/ --base fr                # use fr.json as the reference inste
 translint locales/en.json locales/de.json   # check specific files
 translint locales/ --json                   # machine-readable report
 translint locales/ --strict                 # also fail on extra keys + untranslated
-translint locales/ --allow-identical brand.name   # suppress one heuristic false positive</code></pre>
+translint locales/ --allow-identical brand.name   # suppress one heuristic false positive
+translint locales/ --fix --dry-run          # preview what --fix would insert
+translint locales/ --fix                    # insert missing keys, loudly marked
+translint public/locales/ --recursive --locale-from dir   # en/common.json layout</code></pre>
     <p data-i18n="usage.exitCodes"><code>--base</code> defaults to <code>en</code> - the locale name (filename stem) every
     other discovered file gets checked against. Exit code is <code>0</code> when everything's
     clean, <code>1</code> when translint found something to fix, <code>2</code> if a path
@@ -178,13 +181,13 @@ translint locales/ --allow-identical brand.name   # suppress one heuristic false
 
     <div class="terminal" role="group" aria-label="Terminal output from translint" data-i18n-attr="aria-label:demo.terminalAriaLabel" dir="ltr">
       <p class="terminal__prompt"><span class="prompt-sign">$</span>translint examples/locales --base en</p>
-      <pre class="terminal__output"><code><span class="finding-locale">de (<span class="syn-str">examples\locales\de.json</span>):</span>
+      <pre class="terminal__output"><code><span class="finding-locale">de (<span class="syn-str">examples/locales/de.json</span>):</span>
 <span class="finding-cat finding-cat--err">  empty values (1):</span>
     - checkout.success
 <span class="finding-cat finding-cat--warn">  possibly untranslated (1, heuristic):</span>
     - brand.name
 
-<span class="finding-locale">fr (<span class="syn-str">examples\locales\fr.json</span>):</span>
+<span class="finding-locale">fr (<span class="syn-str">examples/locales/fr.json</span>):</span>
 <span class="finding-cat finding-cat--err">  missing keys (1):</span>
     - nav.settings
 <span class="finding-cat finding-cat--warn">  extra keys (1):</span>
@@ -263,8 +266,8 @@ translint locales/ --allow-identical brand.name   # suppress one heuristic false
       untranslated; it doesn't prove anything.</li>
       <li data-i18n="limits.noTranslationQuality">It doesn't translate anything, and it doesn't validate translation quality - just
       structure: keys, placeholders, non-empty-ness.</li>
-      <li data-i18n="limits.nonRecursive">Non-recursive directory scan. Point it at a directory and it checks the files
-      directly inside, not subdirectories.</li>
+      <li data-i18n="limits.nonRecursive">Directory scans are flat by default. Pass --recursive, plus --locale-from dir
+      for the en/common.json layout, to go into subdirectories.</li>
     </ul>
   </section>
 
@@ -273,7 +276,7 @@ translint locales/ --allow-identical brand.name   # suppress one heuristic false
 <footer class="site-footer">
   <div class="wrap">
     <p><a href="https://github.com/munzzyy/translint" target="_blank" rel="noopener noreferrer">github.com/munzzyy/translint</a></p>
-    <p class="muted" data-i18n="footer.license">Prosperity Public License 3.0.0 - free for noncommercial use.</p>
+    <p class="muted" data-i18n="footer.license">MIT license - free to use, change, and ship, commercial or not.</p>
   </div>
 </footer>
 

@@ -76,7 +76,7 @@ export default {
   "limits.noTranslationQuality":
     "Nem fordít semmit, és nem ellenőrzi a fordítás minőségét - csak a szerkezetet: kulcsokat, helyőrzőket, azt, hogy az értékek nem üresek-e.",
   "limits.nonRecursive":
-    "Nem rekurzív könyvtárvizsgálat. Mutass rá egy könyvtárra, és a közvetlenül benne lévő fájlokat ellenőrzi, nem az alkönyvtárakat.",
+    "A könyvtár-vizsgálat alapból lapos. Az alkönyvtárakhoz add meg a --recursive kapcsolót, az en/common.json elrendezéshez a --locale-from dir kapcsolóval együtt.",
 
-  "footer.license": "Prosperity Public License 3.0.0 - szabadon használható nem kereskedelmi célra.",
+  "footer.license": "MIT licenc - szabadon használható, módosítható és terjeszthető, kereskedelmi célra is.",
 };

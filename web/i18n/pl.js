@@ -76,7 +76,7 @@ export default {
   "limits.noTranslationQuality":
     "Niczego nie tłumaczy i nie sprawdza jakości tłumaczenia - tylko strukturę: klucze, placeholdery, to, czy wartości nie są puste.",
   "limits.nonRecursive":
-    "Nierekursywne skanowanie katalogu. Wskaż mu katalog, a sprawdzi pliki znajdujące się bezpośrednio w nim, nie podkatalogi.",
+    "Skanowanie katalogu jest domyślnie płaskie. Podaj --recursive, a dla układu en/common.json także --locale-from dir, aby wejść do podkatalogów.",
 
-  "footer.license": "Prosperity Public License 3.0.0 - wolna do użytku niekomercyjnego.",
+  "footer.license": "Licencja MIT - wolno używać, zmieniać i rozpowszechniać, komercyjnie lub nie.",
 };

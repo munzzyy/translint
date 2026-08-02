@@ -76,7 +76,7 @@ export default {
   "limits.noTranslationQuality":
     "Het vertaalt niets, en het valideert geen vertaalkwaliteit - alleen structuur: sleutels, placeholders, niet-lege waarden.",
   "limits.nonRecursive":
-    "Niet-recursieve directoryscan. Wijs het naar een directory en het controleert de bestanden die er direct in staan, niet de submappen.",
+    "Een mapscan is standaard plat. Geef --recursive mee, plus --locale-from dir voor de indeling en/common.json, om submappen mee te nemen.",
 
-  "footer.license": "Prosperity Public License 3.0.0 - vrij voor niet-commercieel gebruik.",
+  "footer.license": "MIT-licentie - vrij te gebruiken, aan te passen en te distribueren, commercieel of niet.",
 };

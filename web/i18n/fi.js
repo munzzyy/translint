@@ -76,7 +76,7 @@ export default {
   "limits.noTranslationQuality":
     "Se ei käännä mitään, eikä se validoi käännöksen laatua - vain rakenteen: avaimet, paikkamerkit, sen etteivät arvot ole tyhjiä.",
   "limits.nonRecursive":
-    "Ei-rekursiivinen hakemistoskannaus. Osoita se hakemistoon, ja se tarkistaa suoraan sen sisällä olevat tiedostot, ei alihakemistoja.",
+    "Hakemistojen läpikäynti on oletuksena litteä. Anna --recursive, ja en/common.json-rakenteelle lisäksi --locale-from dir, jotta alihakemistot tulevat mukaan.",
 
-  "footer.license": "Prosperity Public License 3.0.0 - vapaa ei-kaupalliseen käyttöön.",
+  "footer.license": "MIT-lisenssi - vapaa käyttää, muokata ja jaella, kaupallisesti tai ei.",
 };

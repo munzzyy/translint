@@ -76,7 +76,7 @@ export default {
   "limits.noTranslationQuality":
     "Nó không dịch bất cứ thứ gì, và không xác thực chất lượng bản dịch - chỉ kiểm tra cấu trúc: khóa, placeholder, việc giá trị có trống hay không.",
   "limits.nonRecursive":
-    "Quét thư mục không đệ quy. Trỏ nó vào một thư mục và nó sẽ kiểm tra các tệp nằm trực tiếp bên trong, không phải các thư mục con.",
+    "Quét thư mục mặc định chỉ một cấp. Thêm --recursive, kèm --locale-from dir cho bố cục en/common.json, để đi vào thư mục con.",
 
-  "footer.license": "Prosperity Public License 3.0.0 - miễn phí cho mục đích sử dụng phi thương mại.",
+  "footer.license": "Giấy phép MIT - tự do dùng, sửa và phân phối, thương mại hay không.",
 };

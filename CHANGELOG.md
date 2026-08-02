@@ -2,7 +2,51 @@
 
 The same notes ship as [GitHub releases](https://github.com/munzzyy/translint/releases).
 
-## v0.4.0 (unreleased)
+## v0.5.0 (unreleased)
+
+Everything below this heading has been sitting unreleased under a v0.4.0
+title. It isn't what v0.4.0 shipped, so it's numbered v0.5.0 now.
+
+**Licensing:** the 0.3.0 and 0.4.0 artifacts on PyPI, and the v0.4.0 tag, are
+under the Prosperity Public License 3.0.0 - free for noncommercial use only.
+The repository has been MIT since then, and 0.5.0 is the first MIT release.
+The old PyPI pages keep advertising Prosperity forever, so if you installed
+translint from PyPI before this release, that's the license you got.
+
+Fixed in 0.5.0:
+
+- `--fix` on a nested JSON file wrote a flat `"nav.settings"` member next to
+  the `nav` object. translint flattens both shapes so it read the file as
+  fixed, but i18next and vue-i18n walk into the nested object and never find a
+  top-level key with a dot in it. Once a translator replaced the marker the run
+  reported clean, so a real missing key had been made invisible. A missing key
+  now goes into the object its path names, creating intermediate objects where
+  a branch is missing. Flat dot-namespaced files still get flat keys.
+- The `public/locales/<lang>/<namespace>.json` layout can be linted at all now:
+  `--recursive` walks subdirectories and `--locale-from dir` takes the locale
+  from the directory instead of the filename, grouping files by namespace so
+  `en/common.json` is only compared against `de/common.json`. Both are also
+  available on the GitHub Action.
+- A percent sign in ordinary prose is no longer a printf placeholder. `20%off`
+  extracted as a `%o` token, and placeholder mismatches are a hard failure with
+  no allowlist, so a discount string failed CI. Anything carrying a flag,
+  width, precision, length modifier or argument number still matches.
+- A `.properties` file that isn't valid UTF-8 is read, and rewritten by `--fix`,
+  as ISO-8859-1, which is what `java.util.Properties` specifies. Reading one as
+  UTF-8 turned accented bytes into U+FFFD, so two different words compared equal
+  and a correct translation came back as possibly untranslated. `--encoding`
+  names an encoding for everything else, and translint prints a line to stderr
+  whenever a decode wasn't clean instead of degrading quietly.
+- `--format` now also drops the extension filter on a directory scan. The README
+  called it the escape hatch for a non-standard extension, but a directory of
+  `en.lang` files still came back "no locale files found".
+- The `--json` contract is documented: all ten keys, and what `ok` does and
+  doesn't cover (hard findings only, so under `--strict` a locale can be
+  `"ok": true` in a run that exits 1).
+- The site's install command, usage list and footer license match the README
+  again, and the example output uses the paths the CLI actually prints.
+
+Carried over from the never-released v0.4.0 notes:
 
 `--fix` - scoped narrowly on purpose. It inserts a key that's entirely missing
 from a locale file, tagged with an unmissable `[UNTRANSLATED]` marker (`.po`
@@ -38,9 +82,9 @@ first.
 
 Repo hygiene in the same release:
 
-- The README says `pip install translint` - it's been on PyPI since 0.3.0 -
-  and stopped promising a paste-your-files browser playground the site doesn't
-  have yet.
+- The README stopped promising a paste-your-files browser playground the site
+  doesn't have yet. Install now points at the repo rather than PyPI, which is
+  two releases behind and under the old license.
 - ci.yml pins its actions to full commit SHAs like the other workflows, and a
   new CI job fails the build when the version strings in pyproject.toml,
   translint.py, plugin.json, and the site wordmark disagree. That drift

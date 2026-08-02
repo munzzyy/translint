@@ -77,7 +77,7 @@ export default {
   "limits.noTranslationQuality":
     "Ele não traduz nada, e não valida a qualidade da tradução - só a estrutura: chaves, placeholders, valores não vazios.",
   "limits.nonRecursive":
-    "Varredura de diretório não recursiva. Aponte para um diretório e ele verifica os arquivos diretamente dentro dele, não as subpastas.",
+    "A varredura de diretórios é plana por padrão. Passe --recursive, e --locale-from dir para o layout en/common.json, para entrar em subdiretórios.",
 
-  "footer.license": "Prosperity Public License 3.0.0 - livre para uso não comercial.",
+  "footer.license": "Licença MIT - livre para usar, alterar e distribuir, comercialmente ou não.",
 };

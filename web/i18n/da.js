@@ -76,7 +76,7 @@ export default {
   "limits.noTranslationQuality":
     "Den oversætter ingenting og validerer ikke oversættelseskvalitet - kun struktur: nøgler, pladsholdere, at værdier ikke er tomme.",
   "limits.nonRecursive":
-    "Ikke-rekursiv mappescanning. Peg den på en mappe, så tjekker den filerne direkte i den, ikke undermapper.",
+    "Mappescanning er flad som standard. Brug --recursive, plus --locale-from dir til en/common.json-layoutet, for at gå ned i undermapper.",
 
-  "footer.license": "Prosperity Public License 3.0.0 - frit til ikke-kommerciel brug.",
+  "footer.license": "MIT-licens - fri til brug, ændring og distribution, kommercielt eller ej.",
 };

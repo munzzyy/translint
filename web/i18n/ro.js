@@ -76,7 +76,7 @@ export default {
   "limits.noTranslationQuality":
     "Nu traduce nimic, și nu validează calitatea traducerii - doar structura: chei, placeholdere, dacă valorile nu sunt goale.",
   "limits.nonRecursive":
-    "Scanare de director nerecursivă. Îndreaptă-l spre un director și verifică fișierele direct din interior, nu subdirectoarele.",
+    "Scanarea unui director este plată implicit. Dă --recursive, plus --locale-from dir pentru aranjarea en/common.json, ca să intre în subdirectoare.",
 
-  "footer.license": "Prosperity Public License 3.0.0 - liberă pentru uz necomercial.",
+  "footer.license": "Licența MIT - liberă la utilizare, modificare și distribuire, comercial sau nu.",
 };

@@ -76,7 +76,7 @@ export default {
   "limits.noTranslationQuality":
     "Hiçbir şeyi çevirmez ve çeviri kalitesini doğrulamaz - sadece yapıyı doğrular: anahtarlar, yer tutucular, değerlerin boş olup olmadığı.",
   "limits.nonRecursive":
-    "Özyinelemesiz dizin taraması. Bir dizine yönlendir, doğrudan içindeki dosyaları kontrol eder, alt dizinleri değil.",
+    "Dizin taraması varsayılan olarak düzdür. Alt dizinlere inmek için --recursive, en/common.json düzeni için ayrıca --locale-from dir verin.",
 
-  "footer.license": "Prosperity Public License 3.0.0 - ticari olmayan kullanım için serbest.",
+  "footer.license": "MIT lisansı - kullanmak, değiştirmek ve dağıtmak serbest, ticari olsun olmasın.",
 };

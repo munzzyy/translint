@@ -119,8 +119,8 @@ export default {
   "limits.noTranslationQuality":
     "It doesn't translate anything, and it doesn't validate translation quality - just structure: keys, placeholders, non-empty-ness.",
   "limits.nonRecursive":
-    "Non-recursive directory scan. Point it at a directory and it checks the files directly inside, not subdirectories.",
+    "Directory scans are flat by default. Pass --recursive, plus --locale-from dir for the en/common.json layout, to go into subdirectories.",
 
   // ---- Footer ---------------------------------------------------------------------
-  "footer.license": "Prosperity Public License 3.0.0 - free for noncommercial use.",
+  "footer.license": "MIT license - free to use, change, and ship, commercial or not.",
 };

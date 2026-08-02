@@ -76,7 +76,7 @@ export default {
   "limits.noTranslationQuality":
     "翻訳自体は行わず、翻訳の品質も検証しません - チェックするのはあくまで構造、つまりキー、プレースホルダー、値が空でないかどうかだけです。",
   "limits.nonRecursive":
-    "ディレクトリの走査は再帰的ではありません。ディレクトリを指定すると、その直下にあるファイルだけをチェックし、サブディレクトリはチェックしません。",
+    "ディレクトリの走査は既定でフラットです。サブディレクトリまで見るには --recursive を、en/common.json 形式ならあわせて --locale-from dir を指定してください。",
 
-  "footer.license": "Prosperity Public License 3.0.0 - 非営利目的での利用は自由です。",
+  "footer.license": "MIT ライセンス - 商用・非商用を問わず、自由に利用・改変・配布できます。",
 };

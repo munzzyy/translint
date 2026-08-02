@@ -77,7 +77,7 @@ export default {
   "limits.noTranslationQuality":
     "Den oversetter ingenting, og den validerer ikke oversettelseskvalitet - bare struktur: nøkler, plassholdere, at verdier ikke er tomme.",
   "limits.nonRecursive":
-    "Ikke-rekursivt katalogsøk. Pek det mot en katalog, så sjekker det filene direkte inni den, ikke undermapper.",
+    "Katalogskanning er flat som standard. Bruk --recursive, og --locale-from dir for en/common.json-oppsettet, for å gå ned i undermapper.",
 
-  "footer.license": "Prosperity Public License 3.0.0 - fri for ikke-kommersiell bruk.",
+  "footer.license": "MIT-lisens - fri til bruk, endring og distribusjon, kommersielt eller ikke.",
 };

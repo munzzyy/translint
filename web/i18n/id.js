@@ -76,7 +76,7 @@ export default {
   "limits.noTranslationQuality":
     "Ia tidak menerjemahkan apa pun, dan tidak memvalidasi kualitas terjemahan - hanya struktur: kunci, placeholder, apakah nilainya tidak kosong.",
   "limits.nonRecursive":
-    "Pemindaian direktori non-rekursif. Arahkan ke sebuah direktori dan ia memeriksa file yang langsung ada di dalamnya, bukan subdirektori.",
+    "Pemindaian direktori bersifat datar secara bawaan. Berikan --recursive, plus --locale-from dir untuk tata letak en/common.json, agar masuk ke subdirektori.",
 
-  "footer.license": "Prosperity Public License 3.0.0 - bebas untuk penggunaan nonkomersial.",
+  "footer.license": "Lisensi MIT - bebas dipakai, diubah, dan didistribusikan, komersial maupun tidak.",
 };

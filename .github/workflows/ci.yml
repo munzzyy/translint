@@ -53,6 +53,24 @@ jobs:
           site="$(sed -n 's/.*wordmark__version">v\([0-9][0-9.]*\)<.*/\1/p' web/index.html)"
           echo "pyproject=$py __version__=$mod plugin.json=$plug wordmark=$site"
           test -n "$py" && test "$py" = "$mod" && test "$py" = "$plug" && test "$py" = "$site"
+      # The site is the repo homepage and told people to install a different
+      # way than the README did for two releases. Fail the build instead.
+      - name: site install command matches the README
+        run: |
+          python3 - <<'EOF'
+          import pathlib
+          import re
+          import sys
+
+          html = pathlib.Path("web/index.html").read_text()
+          m = re.search(r'id="install".*?<code>([^<\n]+)</code>', html, re.S)
+          if not m:
+              sys.exit("no install command found in web/index.html")
+          cmd = m.group(1)
+          if cmd not in pathlib.Path("README.md").read_text():
+              sys.exit(f"site install command is not in the README: {cmd}")
+          print(f"install command matches: {cmd}")
+          EOF
 
   self-lint:
     # The linter's own site has to pass the linter: extract the site's locale

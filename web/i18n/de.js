@@ -76,7 +76,7 @@ export default {
   "limits.noTranslationQuality":
     "Es übersetzt nichts und prüft nicht die Übersetzungsqualität - nur die Struktur: Schlüssel, Platzhalter, Nicht-Leersein.",
   "limits.nonRecursive":
-    "Nicht rekursiver Verzeichnis-Scan. Zeig damit auf ein Verzeichnis, und es prüft die Dateien direkt darin, nicht die Unterordner.",
+    "Verzeichnis-Scans sind standardmäßig flach. Mit --recursive geht es in Unterverzeichnisse, beim Layout en/common.json zusätzlich mit --locale-from dir.",
 
-  "footer.license": "Prosperity Public License 3.0.0 - frei nutzbar für nicht-kommerzielle Zwecke.",
+  "footer.license": "MIT-Lizenz - frei nutzbar, änderbar und weitergebbar, kommerziell oder nicht.",
 };

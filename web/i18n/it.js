@@ -76,7 +76,7 @@ export default {
   "limits.noTranslationQuality":
     "Non traduce nulla, e non valida la qualità della traduzione - solo la struttura: chiavi, placeholder, valori non vuoti.",
   "limits.nonRecursive":
-    "Scansione della cartella non ricorsiva. Puntalo a una cartella e controlla i file direttamente al suo interno, non le sottocartelle.",
+    "La scansione di una cartella è piatta per impostazione predefinita. Passa --recursive, e --locale-from dir per il layout en/common.json, per entrare nelle sottocartelle.",
 
-  "footer.license": "Prosperity Public License 3.0.0 - libero per uso non commerciale.",
+  "footer.license": "Licenza MIT - libera per uso, modifica e distribuzione, commerciale o no.",
 };

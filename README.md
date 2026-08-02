@@ -3,10 +3,9 @@
 **A missing translation is a UI bug. A renamed placeholder is a crash.** translint checks
 your locale files against a base and flags exactly that: missing keys, stale extra keys,
 empty values, values that still look untranslated, and the one that actually takes an app
-down — placeholder tokens that don't match between the base string and the translation.
+down: placeholder tokens that don't match between the base string and the translation.
 
 [![CI](https://github.com/munzzyy/translint/actions/workflows/ci.yml/badge.svg)](https://github.com/munzzyy/translint/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/translint)](https://pypi.org/project/translint/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![zero dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
 
@@ -40,13 +39,13 @@ message in English. `de.json` shipped `checkout.success` as an empty string:
 
 ```
 $ translint examples/locales --base en
-de (examples\locales\de.json):
+de (examples/locales/de.json):
   empty values (1):
     - checkout.success
   possibly untranslated (1, heuristic):
     - brand.name
 
-fr (examples\locales\fr.json):
+fr (examples/locales/fr.json):
   missing keys (1):
     - nav.settings
   extra keys (1):
@@ -93,7 +92,7 @@ run `translint.py --json` on the locale directory and act on what comes back.
 ## Install
 
 ```bash
-pip install translint
+pipx install git+https://github.com/munzzyy/translint
 ```
 
 Or skip the install entirely, since it's a single file with no dependencies:
@@ -102,6 +101,10 @@ Or skip the install entirely, since it's a single file with no dependencies:
 curl -LO https://raw.githubusercontent.com/munzzyy/translint/main/translint.py
 python translint.py --help
 ```
+
+There is a `translint` on PyPI, but it's stuck on 0.4.0: no `--fix`, ten known
+bugs still in it, and published under the Prosperity Public License rather than
+MIT. Install from here until a newer release lands there.
 
 ## Usage
 
@@ -339,11 +342,14 @@ nothing, so you can see exactly what would land before it does.
 ```yaml
 repos:
   - repo: https://github.com/munzzyy/translint
-    rev: v0.4.0
+    rev: main
     hooks:
       - id: translint
         args: [locales/, --base, en]
 ```
+
+`main` rather than a tag on purpose: the newest tag, `v0.4.0`, predates `--fix` and the
+MIT relicense, so it isn't the thing you want. Pin to a tag once there's a newer one.
 
 The hook always passes the full path you configure in `args`, not just the files that
 changed in that commit (`pass_filenames: false`) - missing-key detection needs to see
@@ -353,7 +359,7 @@ locale would make the comparison meaningless.
 ## As a GitHub Action
 
 ```yaml
-- uses: munzzyy/translint@v0.4.0
+- uses: munzzyy/translint@main
   with:
     paths: locales/
     base: en
@@ -390,7 +396,7 @@ inputs are `format`, `recursive`, `locale-from` and `python-version`; the nested
 
 ## License
 
-MIT — free to use, change, and ship, commercial or not. See [LICENSE](LICENSE).
+MIT. Free to use, change, and ship, commercial or not. See [LICENSE](LICENSE).
 
 ## Support
 

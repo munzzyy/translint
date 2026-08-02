@@ -76,7 +76,7 @@ export default {
   "limits.noTranslationQuality":
     "Nic nepřekládá a neověřuje kvalitu překladu - jen strukturu: klíče, placeholdery, to, zda hodnoty nejsou prázdné.",
   "limits.nonRecursive":
-    "Nerekurzivní procházení adresáře. Nasměrujte ho na adresář a zkontroluje soubory přímo v něm, ne podadresáře.",
+    "Prohledávání adresáře je ve výchozím stavu ploché. Do podadresářů se dostanete přes --recursive, u rozvržení en/common.json navíc s --locale-from dir.",
 
-  "footer.license": "Prosperity Public License 3.0.0 - volná pro nekomerční použití.",
+  "footer.license": "Licence MIT - volná k použití, úpravám i šíření, komerčně i nekomerčně.",
 };

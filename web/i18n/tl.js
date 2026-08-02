@@ -78,7 +78,7 @@ export default {
   "limits.noTranslationQuality":
     "Hindi ito nagsasalin ng kahit ano, at hindi rin nito vine-verify ang kalidad ng translation - structure lang: mga key, placeholder, kung hindi empty ang mga value.",
   "limits.nonRecursive":
-    "Non-recursive na pag-scan ng directory. Ituro mo ito sa isang directory at che-check-in nito ang mga file na direktang nasa loob, hindi ang mga subdirectory.",
+    "Patag ang directory scan bilang default. Idagdag ang --recursive, at --locale-from dir para sa ayos na en/common.json, para pumasok sa mga subdirectory.",
 
-  "footer.license": "Prosperity Public License 3.0.0 - libre para sa non-commercial na paggamit.",
+  "footer.license": "Lisensyang MIT - malayang gamitin, baguhin, at ipamahagi, komersyal man o hindi.",
 };
