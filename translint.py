@@ -8,9 +8,11 @@ base and the translation (the kind of bug that throws a runtime
 KeyError/IndexError the first time that string actually renders), empty
 values, and values that still look untranslated.
 
-Supports JSON (nested or flat dot-namespaced keys), gettext .po, and Java
-.properties files, auto-detected by extension. Standard library only. No
-network, no dependencies, no eval/exec on file contents.
+Supports JSON (nested or flat dot-namespaced keys), gettext .po, Java
+.properties, and YAML files, auto-detected by extension. Standard library
+only for JSON/.po/.properties - YAML needs the optional `translint[yaml]`
+extra (PyYAML), imported lazily so the default install stays dependency
+free. No network, no eval/exec on file contents.
 
 Usage:
   translint locales/                         # scan a directory, base=en
@@ -53,13 +55,15 @@ JSON_SCHEMA_KEYS = {
     "untranslated_markers", "ok",
 }
 
-SUPPORTED_FORMATS = ("json", "po", "properties")
+SUPPORTED_FORMATS = ("json", "po", "properties", "yaml")
 
 EXT_TO_FORMAT = {
     ".json": "json",
     ".po": "po",
     ".pot": "po",
     ".properties": "properties",
+    ".yml": "yaml",
+    ".yaml": "yaml",
 }
 
 # ---------------------------------------------------------------------------
@@ -373,6 +377,34 @@ def parse_json(text, path):
     return flatten_json(data)
 
 
+def parse_yaml(text, path):
+    """YAML locale files - the default i18n format for Rails
+    (config/locales/*.yml) and common in Vue/Nuxt i18n setups. PyYAML isn't
+    a hard dependency: translint's zero-dependency promise covers JSON,
+    .po, and .properties, so the import only happens here, the moment a
+    .yml/.yaml file is actually loaded, and it fails with a plain message
+    naming the extra to install rather than an ImportError traceback.
+    safe_load rejects the arbitrary-object tags full yaml.load would
+    execute; a nested mapping loads into the same dict/list/scalar shapes
+    JSON does, so flatten_json handles both without a separate flattener."""
+    try:
+        import yaml
+    except ImportError:
+        raise ValueError(
+            f"{path}: reading YAML needs PyYAML - install it with "
+            f"'pip install translint[yaml]'"
+        )
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise ValueError(f"{path}: invalid YAML ({exc})")
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: top level must be a YAML mapping")
+    return flatten_json(data)
+
+
 def _properties_line_continues(line):
     """True when `line` ends in an odd number of backslashes: the last one
     is then unpaired, i.e. the java.util.Properties continuation marker.
@@ -575,7 +607,8 @@ def parse_po(text, path):
     return out
 
 
-PARSERS = {"json": parse_json, "po": parse_po, "properties": parse_properties}
+PARSERS = {"json": parse_json, "po": parse_po, "properties": parse_properties,
+           "yaml": parse_yaml}
 
 
 def detect_format(path):
@@ -1339,6 +1372,11 @@ def apply_fix(results, base, dry_run=False, base_nested=None, encoding=None):
     for r in results:
         if not r["missing_keys"]:
             continue
+        if r["format"] not in FIX_INSERTERS:
+            raise ValueError(
+                f"{r['path']}: --fix doesn't support {r['format']} files yet "
+                f"(only {'/'.join(FIX_INSERTERS)})"
+            )
         text, had_bom, enc = _read_for_fix(r["path"], fmt=r["format"], encoding=encoding)
         # Only the JSON inserter has a shape to match, so only it takes the
         # base file's nesting as a tiebreak.

@@ -46,6 +46,15 @@ Fixed in 0.5.0:
 - The site's install command, usage list and footer license match the README
   again, and the example output uses the paths the CLI actually prints.
 
+Added in 0.5.0:
+
+- YAML locale files (`.yml`/`.yaml`) - the default Rails i18n layout and a
+  common Vue/Nuxt one. It's the one format that isn't zero-dependency:
+  reading a `.yml` file needs `pip install translint[yaml]` (PyYAML), and
+  `yaml` is only imported the moment a YAML file is actually loaded, so
+  every other format still needs nothing. `--fix` doesn't write YAML back
+  yet; missing keys in a `.yml` file are reported like any other finding.
+
 Carried over from the never-released v0.4.0 notes:
 
 `--fix` - scoped narrowly on purpose. It inserts a key that's entirely missing

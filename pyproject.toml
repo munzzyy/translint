@@ -21,6 +21,9 @@ classifiers = [
     "Topic :: Software Development :: Quality Assurance",
 ]
 
+[project.optional-dependencies]
+yaml = ["PyYAML>=5.1"]
+
 [project.scripts]
 translint = "translint:main"
 

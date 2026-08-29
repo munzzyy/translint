@@ -18,7 +18,7 @@ inputs:
     required: false
     default: "false"
   format:
-    description: Force a format (json/po/properties) instead of detecting from extension.
+    description: Force a format (json/po/properties/yaml) instead of detecting from extension. YAML needs PyYAML on the runner - this action doesn't install it for you.
     required: false
     default: ""
   recursive:

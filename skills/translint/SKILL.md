@@ -1,6 +1,6 @@
 ---
 name: translint
-description: Check locale/i18n files for missing keys, extra keys, placeholder/interpolation mismatches, empty values, and untranslated strings before shipping translation changes. Use after adding or editing locale files (JSON, gettext .po, Java .properties), before finalizing a PR that touches i18n, or whenever a new locale key is added to a base file and other locales need to catch up. Catches the kind of placeholder bug that throws a runtime error the first time a translated string actually renders.
+description: Check locale/i18n files for missing keys, extra keys, placeholder/interpolation mismatches, empty values, and untranslated strings before shipping translation changes. Use after adding or editing locale files (JSON, gettext .po, Java .properties, YAML), before finalizing a PR that touches i18n, or whenever a new locale key is added to a base file and other locales need to catch up. Catches the kind of placeholder bug that throws a runtime error the first time a translated string actually renders.
 ---
 
 # translint

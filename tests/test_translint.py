@@ -500,6 +500,76 @@ def test_parse_json_rejects_invalid_json():
 
 
 # ---------------------------------------------------------------------------
+# YAML: an optional extra, not the zero-dependency default path. Parsing
+# tests skip when PyYAML isn't installed instead of failing the run, since
+# CI's plain `pip install pytest` step never installs it; the missing
+# dependency test forces the ImportError itself so it runs either way.
+# ---------------------------------------------------------------------------
+
+yaml = pytest.importorskip("yaml", reason="PyYAML is the optional translint[yaml] extra")
+
+
+def test_parse_yaml_nested_mapping():
+    text = "app:\n  title: Hello\n  count: 3\n"
+    result = translint.parse_yaml(text, "x.yaml")
+    assert result == {"app.title": "Hello", "app.count": "3"}
+
+
+def test_parse_yaml_rejects_non_mapping_top_level():
+    try:
+        translint.parse_yaml("- a\n- b\n", "x.yaml")
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "top level must be a YAML mapping" in str(exc)
+
+
+def test_parse_yaml_rejects_invalid_yaml():
+    try:
+        translint.parse_yaml("a: [unclosed\n", "x.yaml")
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "invalid YAML" in str(exc)
+
+
+def test_parse_yaml_empty_file_is_an_empty_locale():
+    assert translint.parse_yaml("", "x.yaml") == {}
+
+
+def test_parse_yaml_missing_pyyaml_gives_a_clear_error(monkeypatch):
+    import sys
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    try:
+        translint.parse_yaml("a: b\n", "x.yaml")
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "translint[yaml]" in str(exc)
+
+
+def test_cli_finds_and_checks_yml_locale_files():
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "en.yml"), "w", encoding="utf-8") as fh:
+            fh.write("greeting: Hello {name}\n")
+        with open(os.path.join(d, "fr.yml"), "w", encoding="utf-8") as fh:
+            fh.write("greeting: Bonjour {nom}\n")
+        code, out, err = run_cli_err([d, "--base", "en", "--json"])
+        assert code == 1
+        results = json.loads(out)
+        assert results[0]["format"] == "yaml"
+        assert results[0]["placeholder_mismatches"]
+
+
+def test_cli_fix_on_yaml_reports_unsupported_instead_of_crashing():
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "en.yml"), "w", encoding="utf-8") as fh:
+            fh.write("a: Hello\nb: World\n")
+        with open(os.path.join(d, "fr.yml"), "w", encoding="utf-8") as fh:
+            fh.write("a: Bonjour\n")
+        code, out, err = run_cli_err([d, "--base", "en", "--fix"])
+        assert code == 2
+        assert "doesn't support yaml" in err
+
+
+# ---------------------------------------------------------------------------
 # check_locale: each issue type, plus the allowlist/heuristic-guard behavior
 # ---------------------------------------------------------------------------
 
@@ -764,7 +834,7 @@ def test_cli_no_locale_files_found_errors_cleanly():
 
 def test_cli_unrecognized_extension_errors_cleanly():
     with tempfile.TemporaryDirectory() as d:
-        p = os.path.join(d, "en.yaml")
+        p = os.path.join(d, "en.lang")
         with open(p, "w", encoding="utf-8") as fh:
             fh.write("a: Hello\n")
         code, out, err = run_cli_err([p, "--base", "en"])
@@ -838,6 +908,25 @@ def test_cli_config_file_supplies_allow_identical_and_do_not_translate():
         with open(os.path.join(d, "de.json"), "w", encoding="utf-8") as fh:
             json.dump({"brand": "Acme", "tagline": "Acme liefert schnell Ergebnisse"}, fh)
         code, out = run_cli([d, "--base", "en", "--strict"])
+        assert code == 0
+
+
+def test_cli_config_file_and_flag_values_are_unioned_not_overridden():
+    # A config file's allow_identical must add to whatever --allow-identical
+    # was also passed on the command line this run, not get clobbered by
+    # argparse's own default=[] or silently win over the flag - both lists
+    # have to survive at once.
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, ".translintrc.json"), "w", encoding="utf-8") as fh:
+            json.dump({"allow_identical": ["from_config"]}, fh)
+        with open(os.path.join(d, "en.json"), "w", encoding="utf-8") as fh:
+            json.dump({"from_config": "Corporate Brand", "from_cli": "Corporate Brand"}, fh)
+        with open(os.path.join(d, "de.json"), "w", encoding="utf-8") as fh:
+            json.dump({"from_config": "Corporate Brand", "from_cli": "Corporate Brand"}, fh)
+        code, out = run_cli([d, "--base", "en", "--strict",
+                              "--allow-identical", "from_cli"])
+        # if the flag silently won, "from_config" would still fail --strict;
+        # if the config silently won, "from_cli" would.
         assert code == 0
 
 

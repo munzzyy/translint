@@ -154,7 +154,7 @@ directory.
 
 ## Formats
 
-Auto-detected by extension, or forced with `--format {json,po,properties}`. Forcing a
+Auto-detected by extension, or forced with `--format {json,po,properties,yaml}`. Forcing a
 format also turns off the extension filter on a directory scan, so a directory of
 `en.lang` / `de.lang` files gets read as the format you named instead of coming back
 empty:
@@ -170,6 +170,13 @@ empty:
   quoted string literals, since `.po`'s C-style escaping is a subset of JSON's.
 - **Java .properties** - `key=value` or `key:value`, comments (`#`/`!`), and backslash
   line continuations.
+- **YAML** (`.yml` / `.yaml`) - the default Rails i18n layout (`config/locales/en.yml`)
+  and common in Vue/Nuxt projects. This is the one format that isn't zero-dependency:
+  reading a YAML file needs PyYAML, installed with `pip install translint[yaml]`. Every
+  other format still needs nothing, and translint only imports `yaml` the moment it
+  actually opens a `.yml`/`.yaml` file, so leaving the extra out doesn't cost anything
+  until you point translint at one. `--fix` doesn't write YAML back yet - missing keys
+  in a `.yml` file are reported like any other finding, just not auto-inserted.
 
 ### Encoding
 
@@ -239,7 +246,7 @@ they don't change without a version bump:
 | --- | --- |
 | `locale` | the locale name (`de`) |
 | `path` | the file this result is about |
-| `format` | `json`, `po` or `properties` |
+| `format` | `json`, `po`, `properties`, or `yaml` |
 | `missing_keys` | keys in the base that this file hasn't got |
 | `extra_keys` | keys here that the base hasn't got |
 | `placeholder_mismatches` | objects of `{key, base, locale}`, the token lists that differ |
