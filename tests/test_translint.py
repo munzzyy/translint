@@ -500,21 +500,30 @@ def test_parse_json_rejects_invalid_json():
 
 
 # ---------------------------------------------------------------------------
-# YAML: an optional extra, not the zero-dependency default path. Parsing
-# tests skip when PyYAML isn't installed instead of failing the run, since
-# CI's plain `pip install pytest` step never installs it; the missing
-# dependency test forces the ImportError itself so it runs either way.
+# YAML: an optional extra, not the zero-dependency default path. Each test
+# that needs real parsing skips for itself when PyYAML isn't installed,
+# since CI's plain `pip install pytest` step never installs it - skipping
+# at module level instead would skip every other test in this file too,
+# once collection reaches this point. The missing-dependency test forces
+# the ImportError itself, so it runs and passes either way.
 # ---------------------------------------------------------------------------
 
-yaml = pytest.importorskip("yaml", reason="PyYAML is the optional translint[yaml] extra")
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
+requires_yaml = pytest.mark.skipif(yaml is None, reason="PyYAML is the optional translint[yaml] extra")
 
 
+@requires_yaml
 def test_parse_yaml_nested_mapping():
     text = "app:\n  title: Hello\n  count: 3\n"
     result = translint.parse_yaml(text, "x.yaml")
     assert result == {"app.title": "Hello", "app.count": "3"}
 
 
+@requires_yaml
 def test_parse_yaml_rejects_non_mapping_top_level():
     try:
         translint.parse_yaml("- a\n- b\n", "x.yaml")
@@ -523,6 +532,7 @@ def test_parse_yaml_rejects_non_mapping_top_level():
         assert "top level must be a YAML mapping" in str(exc)
 
 
+@requires_yaml
 def test_parse_yaml_rejects_invalid_yaml():
     try:
         translint.parse_yaml("a: [unclosed\n", "x.yaml")
@@ -531,6 +541,7 @@ def test_parse_yaml_rejects_invalid_yaml():
         assert "invalid YAML" in str(exc)
 
 
+@requires_yaml
 def test_parse_yaml_empty_file_is_an_empty_locale():
     assert translint.parse_yaml("", "x.yaml") == {}
 
@@ -545,6 +556,7 @@ def test_parse_yaml_missing_pyyaml_gives_a_clear_error(monkeypatch):
         assert "translint[yaml]" in str(exc)
 
 
+@requires_yaml
 def test_cli_finds_and_checks_yml_locale_files():
     with tempfile.TemporaryDirectory() as d:
         with open(os.path.join(d, "en.yml"), "w", encoding="utf-8") as fh:
@@ -558,6 +570,7 @@ def test_cli_finds_and_checks_yml_locale_files():
         assert results[0]["placeholder_mismatches"]
 
 
+@requires_yaml
 def test_cli_fix_on_yaml_reports_unsupported_instead_of_crashing():
     with tempfile.TemporaryDirectory() as d:
         with open(os.path.join(d, "en.yml"), "w", encoding="utf-8") as fh:
