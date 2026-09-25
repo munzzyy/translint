@@ -78,5 +78,5 @@ export default {
   "limits.nonRecursive":
     "La scansione di una cartella è piatta per impostazione predefinita. Passa --recursive, e --locale-from dir per il layout en/common.json, per entrare nelle sottocartelle.",
 
-  "footer.license": "Licenza MIT - libera per uso, modifica e distribuzione, commerciale o no.",
+  "footer.license": "Licenza GPL-3.0-or-later - libera per uso, studio, modifica e condivisione; le copie modificate devono restare aperte.",
 };

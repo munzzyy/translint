@@ -78,5 +78,5 @@ export default {
   "limits.nonRecursive":
     "Een mapscan is standaard plat. Geef --recursive mee, plus --locale-from dir voor de indeling en/common.json, om submappen mee te nemen.",
 
-  "footer.license": "MIT-licentie - vrij te gebruiken, aan te passen en te distribueren, commercieel of niet.",
+  "footer.license": "GPL-3.0-or-later-licentie - vrij te gebruiken, bestuderen, aan te passen en te delen; aangepaste kopieën moeten open blijven.",
 };

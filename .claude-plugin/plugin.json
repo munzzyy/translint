@@ -7,6 +7,6 @@
   },
   "homepage": "https://github.com/munzzyy/translint",
   "repository": "https://github.com/munzzyy/translint",
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "keywords": ["i18n", "l10n", "localization", "linter", "translation", "ci"]
 }

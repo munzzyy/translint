@@ -106,8 +106,8 @@ report actionable (exact input, exact output, what you expected).
 
 ## License of contributions
 
-translint is [MIT licensed](LICENSE). Opening a PR means you're offering your
-change under the same MIT license.
+translint is [GPL-3.0-or-later licensed](LICENSE). Opening a PR means you're offering your
+change under the same GPL license.
 
 ## Security issues
 

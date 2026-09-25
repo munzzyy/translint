@@ -78,5 +78,5 @@ export default {
   "limits.nonRecursive":
     "Le scan d'un répertoire est plat par défaut. Passez --recursive, et --locale-from dir pour la disposition en/common.json, pour descendre dans les sous-répertoires.",
 
-  "footer.license": "Licence MIT - libre d'utilisation, de modification et de distribution, à titre commercial ou non.",
+  "footer.license": "Licence GPL-3.0-or-later - libre d'utilisation, d'étude, de modification et de partage ; les copies modifiées doivent rester ouvertes.",
 };

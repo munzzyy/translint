@@ -122,5 +122,5 @@ export default {
     "Directory scans are flat by default. Pass --recursive, plus --locale-from dir for the en/common.json layout, to go into subdirectories.",
 
   // ---- Footer ---------------------------------------------------------------------
-  "footer.license": "MIT license - free to use, change, and ship, commercial or not.",
+  "footer.license": "GPL-3.0-or-later license - free to use, study, change, and share; modified copies must stay open.",
 };

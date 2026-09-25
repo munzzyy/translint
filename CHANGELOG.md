@@ -9,7 +9,7 @@ title. It isn't what v0.4.0 shipped, so it's numbered v0.5.0 now.
 
 **Licensing:** the 0.3.0 and 0.4.0 artifacts on PyPI, and the v0.4.0 tag, are
 under the Prosperity Public License 3.0.0 - free for noncommercial use only.
-The repository has been MIT since then, and 0.5.0 is the first MIT release.
+The repository was MIT for a while after that, and is now GPL-3.0-or-later.
 The old PyPI pages keep advertising Prosperity forever, so if you installed
 translint from PyPI before this release, that's the license you got.
 

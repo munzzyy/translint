@@ -79,5 +79,5 @@ export default {
   "limits.nonRecursive":
     "目录扫描默认只看一层。加上 --recursive 进入子目录;en/common.json 这种布局还要加 --locale-from dir。",
 
-  "footer.license": "MIT 许可证 - 可自由使用、修改和分发,商用亦可。",
+  "footer.license": "GPL-3.0-or-later 许可证 - 可自由使用、研究、修改和分享;修改后的副本必须保持开源。",
 };

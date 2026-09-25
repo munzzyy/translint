@@ -78,5 +78,5 @@ export default {
   "limits.nonRecursive":
     "Hakemistojen läpikäynti on oletuksena litteä. Anna --recursive, ja en/common.json-rakenteelle lisäksi --locale-from dir, jotta alihakemistot tulevat mukaan.",
 
-  "footer.license": "MIT-lisenssi - vapaa käyttää, muokata ja jaella, kaupallisesti tai ei.",
+  "footer.license": "GPL-3.0-or-later-lisenssi - vapaa käyttää, tutkia, muokata ja jakaa; muokatut kopiot on pidettävä avoimina.",
 };

@@ -78,5 +78,5 @@ export default {
   "limits.nonRecursive":
     "ディレクトリの走査は既定でフラットです。サブディレクトリまで見るには --recursive を、en/common.json 形式ならあわせて --locale-from dir を指定してください。",
 
-  "footer.license": "MIT ライセンス - 商用・非商用を問わず、自由に利用・改変・配布できます。",
+  "footer.license": "GPL-3.0-or-later ライセンス - 自由に利用・研究・改変・共有できます。改変したコピーはオープンのままにする必要があります。",
 };

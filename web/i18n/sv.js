@@ -78,5 +78,5 @@ export default {
   "limits.nonRecursive":
     "Katalogsökningen är platt som standard. Skicka --recursive, och --locale-from dir för upplägget en/common.json, för att gå ner i undermappar.",
 
-  "footer.license": "MIT-licens - fri att använda, ändra och distribuera, kommersiellt eller inte.",
+  "footer.license": "GPL-3.0-or-later-licens - fri att använda, studera, ändra och dela; ändrade kopior måste förbli öppna.",
 };

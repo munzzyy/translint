@@ -79,5 +79,5 @@ export default {
   "limits.nonRecursive":
     "Katalogskanning er flat som standard. Bruk --recursive, og --locale-from dir for en/common.json-oppsettet, for å gå ned i undermapper.",
 
-  "footer.license": "MIT-lisens - fri til bruk, endring og distribusjon, kommersielt eller ikke.",
+  "footer.license": "GPL-3.0-or-later-lisens - fri til bruk, studium, endring og deling; endrede kopier må forbli åpne.",
 };

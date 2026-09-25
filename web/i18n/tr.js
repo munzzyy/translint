@@ -78,5 +78,5 @@ export default {
   "limits.nonRecursive":
     "Dizin taraması varsayılan olarak düzdür. Alt dizinlere inmek için --recursive, en/common.json düzeni için ayrıca --locale-from dir verin.",
 
-  "footer.license": "MIT lisansı - kullanmak, değiştirmek ve dağıtmak serbest, ticari olsun olmasın.",
+  "footer.license": "GPL-3.0-or-later lisansı - kullanmak, incelemek, değiştirmek ve paylaşmak serbest; değiştirilmiş kopyalar açık kalmalıdır.",
 };

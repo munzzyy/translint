@@ -78,5 +78,5 @@ export default {
   "limits.nonRecursive":
     "El escaneo de directorios es plano por defecto. Pasa --recursive, y --locale-from dir para el diseño en/common.json, para entrar en subdirectorios.",
 
-  "footer.license": "Licencia MIT - libre para usar, modificar y distribuir, con fines comerciales o no.",
+  "footer.license": "Licencia GPL-3.0-or-later - libre para usar, estudiar, modificar y compartir; las copias modificadas deben seguir siendo abiertas.",
 };

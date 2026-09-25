@@ -78,5 +78,5 @@ export default {
   "limits.nonRecursive":
     "A könyvtár-vizsgálat alapból lapos. Az alkönyvtárakhoz add meg a --recursive kapcsolót, az en/common.json elrendezéshez a --locale-from dir kapcsolóval együtt.",
 
-  "footer.license": "MIT licenc - szabadon használható, módosítható és terjeszthető, kereskedelmi célra is.",
+  "footer.license": "GPL-3.0-or-later licenc - szabadon használható, tanulmányozható, módosítható és megosztható; a módosított másolatoknak nyitva kell maradniuk.",
 };

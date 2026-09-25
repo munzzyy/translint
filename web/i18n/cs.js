@@ -78,5 +78,5 @@ export default {
   "limits.nonRecursive":
     "Prohledávání adresáře je ve výchozím stavu ploché. Do podadresářů se dostanete přes --recursive, u rozvržení en/common.json navíc s --locale-from dir.",
 
-  "footer.license": "Licence MIT - volná k použití, úpravám i šíření, komerčně i nekomerčně.",
+  "footer.license": "Licence GPL-3.0-or-later - volná k použití, studiu, úpravám i sdílení; upravené kopie musí zůstat otevřené.",
 };

@@ -6,7 +6,7 @@ empty values, values that still look untranslated, and the one that actually tak
 down: placeholder tokens that don't match between the base string and the translation.
 
 [![CI](https://github.com/munzzyy/translint/actions/workflows/ci.yml/badge.svg)](https://github.com/munzzyy/translint/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 ![zero dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
 
 ![translint catching a missing key and a placeholder rename in a German locale file, plus a missing key, a stale extra key, and another placeholder mismatch in a French one](docs/media/demo.svg)
@@ -104,7 +104,7 @@ python translint.py --help
 
 There is a `translint` on PyPI, but it's stuck on 0.4.0: no `--fix`, ten known
 bugs still in it, and published under the Prosperity Public License rather than
-MIT. Install from here until a newer release lands there.
+GPL-3.0-or-later. Install from here until a newer release lands there.
 
 ## Usage
 
@@ -355,8 +355,9 @@ repos:
         args: [locales/, --base, en]
 ```
 
-`main` rather than a tag on purpose: the newest tag, `v0.4.0`, predates `--fix` and the
-MIT relicense, so it isn't the thing you want. Pin to a tag once there's a newer one.
+`main` rather than a tag on purpose: the newest tag, `v0.4.0`, predates `--fix`, the
+MIT relicense, and the later move to GPL-3.0-or-later, so it isn't the thing you want.
+Pin to a tag once there's a newer one.
 
 The hook always passes the full path you configure in `args`, not just the files that
 changed in that commit (`pass_filenames: false`) - missing-key detection needs to see
@@ -403,7 +404,10 @@ inputs are `format`, `recursive`, `locale-from` and `python-version`; the nested
 
 ## License
 
-MIT. Free to use, change, and ship, commercial or not. See [LICENSE](LICENSE).
+[GPL-3.0-or-later](LICENSE). You can use, study, change and share it. If you distribute a
+copy or a modified version, it has to stay under the GPL and come with its source.
+Releases up to v0.4.0 were under the Prosperity Public License 3.0.0. The repository
+moved to MIT after that, and this release moves it to GPL-3.0-or-later.
 
 ## Support
 

@@ -81,5 +81,5 @@ export default {
   "limits.nonRecursive":
     "目錄掃描預設只看一層。加上 --recursive 進入子目錄;en/common.json 這種佈局還要加 --locale-from dir。",
 
-  "footer.license": "MIT 授權條款 - 可自由使用、修改與散布,商用亦可。",
+  "footer.license": "GPL-3.0-or-later 授權條款 - 可自由使用、研究、修改與分享;修改後的副本必須保持開源。",
 };

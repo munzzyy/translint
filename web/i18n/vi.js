@@ -78,5 +78,5 @@ export default {
   "limits.nonRecursive":
     "Quét thư mục mặc định chỉ một cấp. Thêm --recursive, kèm --locale-from dir cho bố cục en/common.json, để đi vào thư mục con.",
 
-  "footer.license": "Giấy phép MIT - tự do dùng, sửa và phân phối, thương mại hay không.",
+  "footer.license": "Giấy phép GPL-3.0-or-later - tự do dùng, nghiên cứu, sửa và chia sẻ; các bản sao đã sửa đổi phải luôn mở.",
 };

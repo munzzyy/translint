@@ -81,5 +81,5 @@ export default {
   "limits.nonRecursive":
     "فحص المجلدات مسطّح افتراضيًا. مرّر --recursive، ومعه --locale-from dir لتخطيط en/common.json، للدخول إلى المجلدات الفرعية.",
 
-  "footer.license": "رخصة MIT - حرة للاستخدام والتعديل والنشر، تجاريًا أو غير تجاري.",
+  "footer.license": "رخصة GPL-3.0-or-later - حرة للاستخدام والدراسة والتعديل والمشاركة؛ يجب أن تبقى النسخ المعدلة مفتوحة.",
 };

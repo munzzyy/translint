@@ -78,5 +78,5 @@ export default {
   "limits.nonRecursive":
     "Mappescanning er flad som standard. Brug --recursive, plus --locale-from dir til en/common.json-layoutet, for at gå ned i undermapper.",
 
-  "footer.license": "MIT-licens - fri til brug, ændring og distribution, kommercielt eller ej.",
+  "footer.license": "GPL-3.0-or-later-licens - fri til brug, studie, ændring og deling; ændrede kopier skal forblive åbne.",
 };

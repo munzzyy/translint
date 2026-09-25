@@ -78,5 +78,5 @@ export default {
   "limits.nonRecursive":
     "Skanowanie katalogu jest domyślnie płaskie. Podaj --recursive, a dla układu en/common.json także --locale-from dir, aby wejść do podkatalogów.",
 
-  "footer.license": "Licencja MIT - wolno używać, zmieniać i rozpowszechniać, komercyjnie lub nie.",
+  "footer.license": "Licencja GPL-3.0-or-later - wolno używać, analizować, zmieniać i udostępniać; zmodyfikowane kopie muszą pozostać otwarte.",
 };

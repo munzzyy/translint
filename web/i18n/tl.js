@@ -80,5 +80,5 @@ export default {
   "limits.nonRecursive":
     "Patag ang directory scan bilang default. Idagdag ang --recursive, at --locale-from dir para sa ayos na en/common.json, para pumasok sa mga subdirectory.",
 
-  "footer.license": "Lisensyang MIT - malayang gamitin, baguhin, at ipamahagi, komersyal man o hindi.",
+  "footer.license": "Lisensyang GPL-3.0-or-later - malayang gamitin, pag-aralan, baguhin, at ibahagi; dapat manatiling bukas ang mga binagong kopya.",
 };

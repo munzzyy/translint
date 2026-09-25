@@ -78,5 +78,5 @@ export default {
   "limits.nonRecursive":
     "Pemindaian direktori bersifat datar secara bawaan. Berikan --recursive, plus --locale-from dir untuk tata letak en/common.json, agar masuk ke subdirektori.",
 
-  "footer.license": "Lisensi MIT - bebas dipakai, diubah, dan didistribusikan, komersial maupun tidak.",
+  "footer.license": "Lisensi GPL-3.0-or-later - bebas dipakai, dipelajari, diubah, dan dibagikan; salinan yang diubah harus tetap terbuka.",
 };

@@ -81,5 +81,5 @@ export default {
   "limits.nonRecursive":
     "סריקת תיקייה שטוחה כברירת מחדל. העבירו --recursive, ועם --locale-from dir עבור מבנה en/common.json, כדי לרדת לתת-תיקיות.",
 
-  "footer.license": "רישיון MIT - חופשי לשימוש, לשינוי ולהפצה, מסחרי או לא.",
+  "footer.license": "רישיון GPL-3.0-or-later - חופשי לשימוש, לימוד, שינוי ושיתוף; עותקים ששונו חייבים להישאר פתוחים.",
 };

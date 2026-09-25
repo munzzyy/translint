@@ -78,5 +78,5 @@ export default {
   "limits.nonRecursive":
     "디렉터리 스캔은 기본적으로 한 단계만 봅니다. 하위 디렉터리까지 보려면 --recursive를, en/common.json 구조라면 --locale-from dir도 함께 지정하세요.",
 
-  "footer.license": "MIT 라이선스 - 상업적 용도를 포함해 자유롭게 사용, 수정, 배포할 수 있습니다.",
+  "footer.license": "GPL-3.0-or-later 라이선스 - 자유롭게 사용, 연구, 수정, 공유할 수 있습니다. 수정된 사본은 계속 공개되어야 합니다.",
 };

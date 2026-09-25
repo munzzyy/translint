@@ -78,5 +78,5 @@ export default {
   "limits.nonRecursive":
     "Verzeichnis-Scans sind standardmäßig flach. Mit --recursive geht es in Unterverzeichnisse, beim Layout en/common.json zusätzlich mit --locale-from dir.",
 
-  "footer.license": "MIT-Lizenz - frei nutzbar, änderbar und weitergebbar, kommerziell oder nicht.",
+  "footer.license": "GPL-3.0-or-later-Lizenz - frei nutzbar, studierbar, änderbar und teilbar; geänderte Kopien müssen offen bleiben.",
 };

@@ -78,5 +78,5 @@ export default {
   "limits.nonRecursive":
     "Scanarea unui director este plată implicit. Dă --recursive, plus --locale-from dir pentru aranjarea en/common.json, ca să intre în subdirectoare.",
 
-  "footer.license": "Licența MIT - liberă la utilizare, modificare și distribuire, comercial sau nu.",
+  "footer.license": "Licența GPL-3.0-or-later - liberă la utilizare, studiu, modificare și distribuire; copiile modificate trebuie să rămână deschise.",
 };

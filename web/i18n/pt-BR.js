@@ -79,5 +79,5 @@ export default {
   "limits.nonRecursive":
     "A varredura de diretórios é plana por padrão. Passe --recursive, e --locale-from dir para o layout en/common.json, para entrar em subdiretórios.",
 
-  "footer.license": "Licença MIT - livre para usar, alterar e distribuir, comercialmente ou não.",
+  "footer.license": "Licença GPL-3.0-or-later - livre para usar, estudar, alterar e compartilhar; cópias modificadas precisam continuar abertas.",
 };
