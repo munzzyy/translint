@@ -11,17 +11,17 @@ down: placeholder tokens that don't match between the base string and the transl
 
 ![translint catching a missing key and a placeholder rename in a German locale file, plus a missing key, a stale extra key, and another placeholder mismatch in a French one](docs/media/demo.svg)
 
-Four ways to use it: see it run in the [browser demo](https://munzzyy.github.io/translint/),
+Four ways to use it: see it run in the [browser demo](https://translint.munzzyy.dev/),
 run the CLI by hand or in a pre-commit hook, gate CI with the GitHub Action, or install it as
 a skill so your AI coding agent checks its own i18n changes before handing them back to you.
 One Python file, standard library only, no dependencies.
 
-**[Try it in your browser](https://munzzyy.github.io/translint/).** Real output from the
+**[Try it in your browser](https://translint.munzzyy.dev/).** Real output from the
 bundled example locale files, not a mockup - nine themes, works on a phone, nothing leaves
 your machine. A linter for translations should practice what it lints, so the site itself
 reads in 32 languages, right-to-left included - pick yours from the header.
 
-[![translint's site: the base/translation example, real CLI output, and the theme picker in the header](docs/media/demo.png)](https://munzzyy.github.io/translint/)
+[![translint's site: the base/translation example, real CLI output, and the theme picker in the header](docs/media/demo.png)](https://translint.munzzyy.dev/)
 
 ## Example
 
