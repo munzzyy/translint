@@ -995,6 +995,11 @@ def _untranslated_value(base_value):
     return f"{UNTRANSLATED_MARKER} {base_value}"
 
 
+def _base_value(base, key):
+    """The base string a missing key is filled in from."""
+    return base[key]
+
+
 def _json_detect_indent(text):
     """Sniff the indent unit from this file's own first indented key line
     rather than assuming one - reformatting every existing line to a
@@ -1008,18 +1013,17 @@ def _json_detect_indent(text):
     return "  "
 
 
-def _json_object_extents(text):
-    """Map each JSON object in `text` to the (open, close) index of its own
-    braces, keyed by the tuple of member names that reaches it - () for the
-    root object. Lets --fix splice a new member into one exact spot without
-    reserializing (and therefore reformatting) anything else.
-
-    Only objects reached through objects get a path; anything inside an
-    array is tracked for brace balance and then dropped, since a key path
-    never descends into one. `text` is assumed to be JSON that already
-    parsed - parse_json ran on this same file during the check pass."""
+def _json_container_extents(text):
+    """Map each JSON object and array in `text` to (open, close, is_object),
+    the index of its own brackets, keyed by the path that reaches it: () for
+    the root, then a member name for each object step and the element's
+    index (as a string, the way flatten_json names it) for each array step.
+    Lets --fix splice a new member or element into one exact spot without
+    reserializing (and therefore reformatting) anything else. `text` is
+    assumed to be JSON that already parsed - parse_json ran on this same
+    file during the check pass."""
     extents = {}
-    stack = []          # (parent_path, open_idx, is_object, own_path)
+    stack = []          # [parent_path, open_idx, is_object, own_path, element_index]
     cur_path = ()
     pending_key = None
     i, n = 0, len(text)
@@ -1047,30 +1051,36 @@ def _json_object_extents(text):
         if ch in "{[":
             if not stack:
                 own = ()
-            elif stack[-1][2] and cur_path is not None and pending_key is not None:
-                own = cur_path + (pending_key,)
-            else:
+            elif cur_path is None:
                 own = None
-            stack.append((cur_path, i, ch == "{", own))
+            elif stack[-1][2]:
+                own = cur_path + (pending_key,) if pending_key is not None else None
+            else:
+                own = cur_path + (str(stack[-1][4]),)
+            stack.append([cur_path, i, ch == "{", own, 0])
             cur_path = own
             pending_key = None
         elif ch in "}]" and stack:
-            parent, open_idx, is_object, own = stack.pop()
-            if is_object and own is not None:
-                extents[own] = (open_idx, i)
+            parent, open_idx, is_object, own, _count = stack.pop()
+            if own is not None:
+                extents[own] = (open_idx, i, is_object)
             cur_path = parent
             pending_key = None
+        elif ch == "," and stack and not stack[-1][2]:
+            stack[-1][4] += 1
         i += 1
     return extents
 
 
 def _json_member_indent(text, open_idx, close_idx, fallback):
-    """The indent of the given object's own member lines, sniffed from the
-    file rather than assumed, so an inserted member lines up with the ones
-    already there whatever the file's style is."""
+    """The indent of the given container's own member lines, sniffed from
+    the file rather than assumed, so an inserted member lines up with the
+    ones already there whatever the file's style is."""
+    is_object = text[open_idx] == "{"
     for line in text[open_idx:close_idx].split("\n")[1:]:
         stripped = line.lstrip(" \t")
-        if stripped.startswith('"'):
+        if (stripped.startswith('"') if is_object
+                else stripped and not stripped.startswith("]")):
             return line[:len(line) - len(stripped)]
     return fallback
 
@@ -1096,37 +1106,118 @@ def _json_insert_block(tree, indent_unit, member_indent):
     return "\n".join(member_indent + line[len(indent_unit):] for line in body)
 
 
+def _json_element_block(elements, indent_unit, member_indent):
+    """Serialize new array elements as JSON text indented to sit inside an
+    existing multi-line array, without its brackets."""
+    out = []
+    for element in elements:
+        dumped = json.dumps(element, ensure_ascii=False, indent=indent_unit)
+        out.append("\n".join(member_indent + line for line in dumped.split("\n")))
+    return ",\n".join(out)
+
+
 def _json_splice(text, close_idx, block):
-    """Put `block` in as the last member(s) of the object closing at
-    close_idx. Every other character in the file is left exactly as it
+    """Put `block` in as the last member(s) of the object or array closing
+    at close_idx. Every other character in the file is left exactly as it
     was, apart from the comma valid JSON requires on what used to be the
     final member."""
     line_start = text.rfind("\n", 0, close_idx) + 1
     close_indent = text[line_start:close_idx]
     if close_indent.strip():
-        close_indent = ""
+        # "errors": {} on one line: the bracket moves down, level with its key
+        close_indent = close_indent[:len(close_indent) - len(close_indent.lstrip(" \t"))]
     before = text[:close_idx].rstrip()
-    sep = "" if before.endswith("{") else ","
+    sep = "" if before.endswith(("{", "[")) else ","
     return f"{before}{sep}\n{block}\n{close_indent}{text[close_idx:]}"
 
 
-def fix_missing_keys_json(text, missing_keys, base, base_nested=None):
-    """Insert every key in missing_keys into the file, matching the shape
-    the file already uses.
+def _json_append_elements(text, open_idx, close_idx, elements, indent_unit, fallback):
+    """Append elements to the array between open_idx and close_idx. An array
+    written on one line stays on one line, since spreading it over several
+    would rewrite the line the existing elements are on anyway."""
+    if "\n" not in text[open_idx:close_idx]:
+        before = text[:close_idx].rstrip()
+        sep = "" if before.endswith("[") else ", "
+        dumped = ", ".join(json.dumps(e, ensure_ascii=False) for e in elements)
+        return f"{before}{sep}{dumped}{text[close_idx:]}"
+    member_indent = _json_member_indent(text, open_idx, close_idx, fallback)
+    return _json_splice(text, close_idx,
+                        _json_element_block(elements, indent_unit, member_indent))
 
-    In a nested file the key goes into the object its path names, creating
-    intermediate objects as needed, because that is the only form an i18n
-    runtime can resolve: i18next, vue-i18n and friends walk into the nested
-    object for t("nav.settings"), so a literal top-level "nav.settings"
-    member is invisible to them at runtime even though flatten_json() reads
-    it as the same key. Writing the flat form turned a correctly-reported
-    missing key into a permanently-missing string that translint then
-    called clean.
 
-    In a flat, dot-namespaced file the key is still written flat. Either
-    way only the few characters around one closing brace move: no existing
-    line is reformatted, and the diff is the new key(s) and the one comma
-    JSON requires on the member that used to be last."""
+_JSON_INDEX_RX = re.compile(r"0|[1-9][0-9]*")
+
+
+def _json_shape_at(tree, path):
+    """The base file's node at `path`, or None if it has nothing there."""
+    node = tree
+    for seg in path:
+        if isinstance(node, dict):
+            node = node.get(seg)
+        elif isinstance(node, list) and _JSON_INDEX_RX.fullmatch(seg) \
+                and int(seg) < len(node):
+            node = node[int(seg)]
+        else:
+            return None
+    return node
+
+
+def _json_listify(node, shape):
+    """Turn the parts of a new subtree that the base file holds as arrays
+    back into arrays. The subtree is built from flattened keys, which spell
+    an array's elements as members named 0, 1, 2..., and writing it out as
+    an object would hand the app a different type than the base has."""
+    if not isinstance(node, dict):
+        return node
+    if isinstance(shape, list) and sorted(node) == sorted(str(i) for i in range(len(node))):
+        return [_json_listify(node[str(i)], shape[i] if i < len(shape) else None)
+                for i in range(len(node))]
+    return {k: _json_listify(v, shape.get(k) if isinstance(shape, dict) else None)
+            for k, v in node.items()}
+
+
+def _json_new_tree(entries, base_tree, at):
+    """Build the subtree for new (relative segments, value) entries that go
+    in at path `at`, shaped like the base file."""
+    tree = {}
+    for rest, value in entries:
+        node = tree
+        for seg in rest[:-1]:
+            node = node.setdefault(seg, {})
+        node[rest[-1]] = value
+    return _json_listify(tree, _json_shape_at(base_tree, at))
+
+
+def _json_place(data, extents, key):
+    """Where a missing key can go: (path of the deepest container the file
+    already has on the key's path, the segments still to create), or a
+    reason string when the key can't go in without shadowing something the
+    file already holds - a second "days" member next to an existing "days"
+    array is valid JSON, but every parser keeps only the last one."""
+    segments = key.split(".")
+    node, prefix = data, ()
+    for i, seg in enumerate(segments):
+        if isinstance(node, dict):
+            if seg not in node:
+                return prefix, segments[i:]
+            child = node[seg]
+        else:
+            if not _JSON_INDEX_RX.fullmatch(seg):
+                return f"'{'.'.join(prefix)}' is an array in this file"
+            if int(seg) >= len(node):
+                return prefix, segments[i:]
+            child = node[int(seg)]
+        path = prefix + (seg,)
+        if (i == len(segments) - 1 or not isinstance(child, (dict, list))
+                or path not in extents):
+            return f"'{'.'.join(path)}' already holds a different shape of value"
+        node, prefix = child, path
+    return f"'{key}' already holds a different shape of value"
+
+
+def _fix_json(text, missing_keys, base, base_nested=None, base_tree=None):
+    """fix_missing_keys_json, plus {key: reason} for every key it had to
+    leave out."""
     close_idx = text.rfind("}")
     open_idx = text.find("{")
     if close_idx == -1 or open_idx == -1 or open_idx > close_idx:
@@ -1144,42 +1235,82 @@ def fix_missing_keys_json(text, missing_keys, base, base_nested=None):
     if _json_layout(data, base_nested) == "flat":
         new_lines = [
             f"{indent}{json.dumps(key, ensure_ascii=False)}: "
-            f"{json.dumps(_untranslated_value(base[key]), ensure_ascii=False)}"
+            f"{json.dumps(_untranslated_value(_base_value(base, key)), ensure_ascii=False)}"
             for key in missing_keys
         ]
-        return _json_splice(text, close_idx, ",\n".join(new_lines))
+        return _json_splice(text, close_idx, ",\n".join(new_lines)), {}
 
-    extents = _json_object_extents(text)
+    extents = _json_container_extents(text)
+    skipped = {}
 
-    # Group by the deepest object that already exists on each key's path,
-    # so two keys under the same new parent share one new object instead of
-    # writing it twice.
+    # Group by the deepest container that already exists on each key's
+    # path, so two keys under the same new parent share one new object
+    # instead of writing it twice.
     groups = {}
     for key in missing_keys:
-        segments = key.split(".")
-        node, prefix = data, ()
-        for seg in segments[:-1]:
-            nxt = node.get(seg) if isinstance(node, dict) else None
-            if not isinstance(nxt, dict) or (prefix + (seg,)) not in extents:
-                break
-            node, prefix = nxt, prefix + (seg,)
-        groups.setdefault(prefix, []).append((segments[len(prefix):], key))
+        placed = _json_place(data, extents, key)
+        if isinstance(placed, str):
+            skipped[key] = placed
+            continue
+        prefix, rest = placed
+        groups.setdefault(prefix, []).append((rest, key))
 
-    # Deepest object first (its closing brace has the lowest index), so an
-    # insertion never shifts a target that hasn't been spliced yet.
+    # Deepest container first (its closing bracket has the lowest index), so
+    # an insertion never shifts a target that hasn't been spliced yet.
     for prefix in sorted(groups, key=lambda p: extents[p][1], reverse=True):
-        tree = {}
-        for rest, key in groups[prefix]:
-            node = tree
-            for seg in rest[:-1]:
-                node = node.setdefault(seg, {})
-            node[rest[-1]] = _untranslated_value(base[key])
-        obj_open, obj_close = extents[prefix]
-        member_indent = _json_member_indent(
-            text, obj_open, obj_close, indent * (len(prefix) + 1)
-        )
-        text = _json_splice(text, obj_close, _json_insert_block(tree, indent, member_indent))
-    return text
+        obj_open, obj_close, is_object = extents[prefix]
+        fallback = indent * (len(prefix) + 1)
+        entries = [(rest, _untranslated_value(_base_value(base, key)))
+                   for rest, key in groups[prefix]]
+        if is_object:
+            tree = _json_new_tree(entries, base_tree, prefix)
+            member_indent = _json_member_indent(text, obj_open, obj_close, fallback)
+            text = _json_splice(text, obj_close, _json_insert_block(tree, indent, member_indent))
+            continue
+        # An array only grows at its end, one element after another; an
+        # index past a gap has nowhere to go.
+        have = len(_json_shape_at(data, prefix))
+        by_index = {}
+        for rest, value in entries:
+            by_index.setdefault(int(rest[0]), []).append((rest[1:], value))
+        if sorted(by_index) != list(range(have, have + len(by_index))):
+            for _rest, key in groups[prefix]:
+                skipped[key] = f"'{'.'.join(prefix)}' would need a gap in its array"
+            continue
+        elements = []
+        for idx in sorted(by_index):
+            parts = by_index[idx]
+            if len(parts) == 1 and not parts[0][0]:
+                elements.append(parts[0][1])
+            else:
+                elements.append(_json_new_tree(parts, base_tree, prefix + (str(idx),)))
+        text = _json_append_elements(text, obj_open, obj_close, elements, indent, fallback)
+    return text, skipped
+
+
+def fix_missing_keys_json(text, missing_keys, base, base_nested=None, base_tree=None):
+    """Insert every key in missing_keys into the file, matching the shape
+    the file already uses.
+
+    In a nested file the key goes into the object its path names, creating
+    intermediate objects as needed, because that is the only form an i18n
+    runtime can resolve: i18next, vue-i18n and friends walk into the nested
+    object for t("nav.settings"), so a literal top-level "nav.settings"
+    member is invisible to them at runtime even though flatten_json() reads
+    it as the same key. Writing the flat form turned a correctly-reported
+    missing key into a permanently-missing string that translint then
+    called clean.
+
+    An array element the file is missing is appended to the array, and a
+    branch the file lacks entirely is written as an array wherever the base
+    file (base_tree, its parsed JSON) has one. A key that can't go in
+    without a second member shadowing one the file already has is left out.
+
+    In a flat, dot-namespaced file the key is still written flat. Either
+    way only the few characters around one closing bracket move: no
+    existing line is reformatted, and the diff is the new key(s) and the
+    one comma JSON requires on the member that used to be last."""
+    return _fix_json(text, missing_keys, base, base_nested, base_tree)[0]
 
 
 _PROPERTIES_KEY_ESCAPE_RX = re.compile(r"[\\=: \t]")
@@ -1211,7 +1342,7 @@ def fix_missing_keys_properties(text, missing_keys, base):
     line."""
     lines = [
         f"{_properties_escape_key(key)}="
-        f"{_properties_escape_value(_untranslated_value(base[key]))}"
+        f"{_properties_escape_value(_untranslated_value(_base_value(base, key)))}"
         for key in missing_keys
     ]
     return text.rstrip("\n") + "\n" + "\n".join(lines) + "\n"
@@ -1233,13 +1364,19 @@ def fix_missing_keys_po(text, missing_keys, base):
         if msgctxt is not None:
             lines.append(f"msgctxt {json.dumps(msgctxt, ensure_ascii=False)}")
         lines.append(f"msgid {json.dumps(msgid, ensure_ascii=False)}")
-        lines.append(f"msgstr {json.dumps(base[key], ensure_ascii=False)}")
+        lines.append(f"msgstr {json.dumps(_base_value(base, key), ensure_ascii=False)}")
         blocks.append("\n".join(lines))
     return text.rstrip("\n") + "\n\n" + "\n\n".join(blocks) + "\n"
 
 
-FIX_INSERTERS = {"json": fix_missing_keys_json, "po": fix_missing_keys_po,
-                  "properties": fix_missing_keys_properties}
+# Each returns (new_text, {key: reason}) - the reason naming why a key was
+# left out rather than written.
+FIX_INSERTERS = {
+    "json": _fix_json,
+    "po": lambda text, keys, base, **_: (fix_missing_keys_po(text, keys, base), {}),
+    "properties": lambda text, keys, base, **_: (
+        fix_missing_keys_properties(text, keys, base), {}),
+}
 
 
 def _key_display(key):
@@ -1283,11 +1420,11 @@ def _results_for_json(results):
     return out
 
 
-def _json_file_is_nested(path):
-    """Whether the base file nests its keys. Used only as the tiebreak for
-    a --fix target that has no shape of its own (an empty locale file, or
-    one with only single-segment keys). None for a non-JSON or unreadable
-    base, which _json_layout treats as flat."""
+def _json_base_tree(path):
+    """The base file's parsed JSON, which --fix uses to give a new branch
+    the base's shape: whether it nests at all (the tiebreak for a target
+    with no shape of its own) and which branches are arrays. None for a
+    non-JSON or unreadable base."""
     if detect_format(path) != "json":
         return None
     try:
@@ -1295,9 +1432,7 @@ def _json_file_is_nested(path):
             data = json.load(fh)
     except (OSError, ValueError):
         return None
-    if not isinstance(data, dict):
-        return None
-    return any(isinstance(v, (dict, list)) for v in data.values())
+    return data if isinstance(data, dict) else None
 
 
 class NotUTF8Error(Exception):
@@ -1354,21 +1489,17 @@ def _read_for_fix(path, fmt=None, encoding=None):
         raise NotUTF8Error(path, "utf-8")
 
 
-def apply_fix(results, base, dry_run=False, base_nested=None, encoding=None):
-    """Insert missing keys for every locale result that has any, using the
-    format-appropriate inserter above. Reads and (unless dry_run) rewrites
-    each affected file directly - the one place in translint that writes
-    anything besides stdout, and only ever this: new keys inserted, nothing
-    existing rewritten. Returns a human-readable summary string (None if
-    there was nothing to insert) - the caller prints it to stderr, never
-    stdout, so --json/--quiet output stays exactly the machine-readable
-    contract JSON_SCHEMA_KEYS promises, --fix or not.
+def plan_fix(results, base, base_nested=None, encoding=None, base_tree=None):
+    """Work out every write --fix would make for these results without
+    making any of them. Returns a list of (result, new file bytes or None,
+    inserted keys, {skipped key: reason}).
 
-    Reads, rewrites and re-encodes every target up front, so a file that
-    won't decode (NotUTF8Error) or whose encoding can't hold the inserted
-    value (FixEncodeError) stops the run before anything has been written
-    rather than after some files were - all or nothing."""
-    pending = []
+    Reading, inserting and re-encoding all happen here, so a file that
+    won't decode (NotUTF8Error), whose encoding can't hold the inserted
+    value (FixEncodeError), or whose format --fix can't write (ValueError)
+    stops the run before write_fix has touched anything. main() plans every
+    namespace group before writing any of them for the same reason."""
+    plans = []
     for r in results:
         if not r["missing_keys"]:
             continue
@@ -1379,29 +1510,63 @@ def apply_fix(results, base, dry_run=False, base_nested=None, encoding=None):
             )
         text, had_bom, enc = _read_for_fix(r["path"], fmt=r["format"], encoding=encoding)
         # Only the JSON inserter has a shape to match, so only it takes the
-        # base file's nesting as a tiebreak.
-        extra = {"base_nested": base_nested} if r["format"] == "json" else {}
-        new_text = FIX_INSERTERS[r["format"]](text, r["missing_keys"], base, **extra)
-        try:
-            body = new_text.encode(enc)
-        except UnicodeEncodeError:
-            raise FixEncodeError(r["path"], enc)
-        pending.append((r, (_UTF8_BOM if had_bom else b"") + body))
+        # base file's shape.
+        extra = ({"base_nested": base_nested, "base_tree": base_tree}
+                 if r["format"] == "json" else {})
+        new_text, skipped = FIX_INSERTERS[r["format"]](text, r["missing_keys"], base, **extra)
+        inserted = [k for k in r["missing_keys"] if k not in skipped]
+        out = None
+        if inserted:
+            try:
+                out = (_UTF8_BOM if had_bom else b"") + new_text.encode(enc)
+            except UnicodeEncodeError:
+                raise FixEncodeError(r["path"], enc)
+        plans.append((r, out, inserted, skipped))
+    return plans
 
-    lines = []
-    for r, out in pending:
-        if not dry_run:
+
+def write_fix(plans, dry_run=False):
+    """Write what plan_fix worked out (unless dry_run) and return the
+    summary for stderr, or None if there was nothing to report."""
+    done, left = [], []
+    for r, out, inserted, skipped in plans:
+        if out is not None and not dry_run:
             with open(r["path"], "wb") as fh:
                 fh.write(out)
-        keys_display = ", ".join(_key_display(k) for k in r["missing_keys"])
-        lines.append(f"  {r['locale']} ({r['path']}): "
-                      f"{len(r['missing_keys'])} key(s) - {keys_display}")
-    if not lines:
-        return None
-    verb = "would insert" if dry_run else "inserted"
-    header = f"translint --fix: {verb} missing keys" + (" (dry run, nothing written)"
-                                                          if dry_run else "")
-    return "\n".join([header] + lines)
+        if inserted:
+            keys_display = ", ".join(_key_display(k) for k in inserted)
+            done.append(f"  {r['locale']} ({r['path']}): "
+                        f"{len(inserted)} key(s) - {keys_display}")
+        for key, reason in skipped.items():
+            left.append(f"  {r['locale']} ({r['path']}): {_key_display(key)} - {reason}")
+    lines = []
+    if done:
+        verb = "would insert" if dry_run else "inserted"
+        lines.append(f"translint --fix: {verb} missing keys"
+                     + (" (dry run, nothing written)" if dry_run else ""))
+        lines += done
+    if left:
+        lines.append("translint --fix: not inserted, fix these by hand")
+        lines += left
+    return "\n".join(lines) if lines else None
+
+
+def apply_fix(results, base, dry_run=False, base_nested=None, encoding=None,
+              base_tree=None):
+    """Insert missing keys for every locale result that has any, using the
+    format-appropriate inserter above. Reads and (unless dry_run) rewrites
+    each affected file directly - the one place in translint that writes
+    anything besides stdout, and only ever this: new keys inserted, nothing
+    existing rewritten. Returns a human-readable summary string (None if
+    there was nothing to report) - the caller prints it to stderr, never
+    stdout, so --json/--quiet output stays exactly the machine-readable
+    contract JSON_SCHEMA_KEYS promises, --fix or not.
+
+    Everything is planned before anything is written (see plan_fix), so a
+    failure leaves every file as it was - all or nothing."""
+    return write_fix(plan_fix(results, base, base_nested=base_nested,
+                              encoding=encoding, base_tree=base_tree),
+                     dry_run=dry_run)
 
 
 # ---------------------------------------------------------------------------
@@ -1581,17 +1746,16 @@ def main(argv=None):
         # Always printed to stderr, never stdout - --json/--quiet output on
         # stdout must stay exactly the machine-readable contract regardless
         # of whether --fix had anything to insert.
-        summaries = []
+        plans = []
         try:
             for group in groups:
-                summary = apply_fix(
+                base_tree = _json_base_tree(group["base_path"])
+                plans += plan_fix(
                     [r for g, r in checked if g is group], group["base"],
-                    dry_run=args.dry_run,
-                    base_nested=_json_file_is_nested(group["base_path"]),
-                    encoding=args.encoding,
+                    base_nested=None if base_tree is None else any(
+                        isinstance(v, (dict, list)) for v in base_tree.values()),
+                    encoding=args.encoding, base_tree=base_tree,
                 )
-                if summary:
-                    summaries.append(summary)
         except NotUTF8Error as exc:
             print(f"translint: {exc.path}: not valid {exc.encoding}, refusing to "
                   f"rewrite (--fix) - pass --encoding to name the file's encoding",
@@ -1605,7 +1769,11 @@ def main(argv=None):
         except ValueError as exc:
             print(f"translint: {exc}", file=sys.stderr)
             return 2
-        summary = "\n".join(summaries)
+        try:
+            summary = write_fix(plans, dry_run=args.dry_run)
+        except OSError as exc:
+            print(f"translint: {exc}", file=sys.stderr)
+            return 2
         if summary:
             print(summary, file=sys.stderr)
             if not args.dry_run:

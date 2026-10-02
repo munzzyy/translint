@@ -1861,3 +1861,120 @@ def test_cli_fix_refuses_when_the_value_will_not_fit_the_file_encoding():
         assert code == 2
         assert "refusing to rewrite" in err
         assert open(fr_path, "rb").read() == before
+
+
+# ---------------------------------------------------------------------------
+# --fix: arrays, keys that would shadow an existing member, and
+# all-or-nothing writes across namespace groups
+# ---------------------------------------------------------------------------
+
+
+def _top_level_keys(text):
+    return json.loads(text, object_pairs_hook=lambda pairs: [k for k, _ in pairs])
+
+
+def test_cli_fix_appends_a_missing_array_element_instead_of_shadowing_the_array():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {
+            "en.json": '{\n  "days": ["Monday", "Tuesday", "Wednesday"],\n'
+                       '  "title": "Calendar"\n}\n',
+            "de.json": '{\n  "days": ["Montag", "Dienstag"],\n  "title": "Kalender"\n}\n',
+        })
+        code, out, err = run_cli_err([d, "--base", "en", "--fix", "--json"])
+        text = open(os.path.join(d, "de.json"), encoding="utf-8").read()
+        assert _top_level_keys(text).count("days") == 1
+        data = json.loads(text)
+        assert data["days"] == ["Montag", "Dienstag", "[UNTRANSLATED] Wednesday"]
+        assert "days.2" in err
+        results = json.loads(out)
+        assert results[0]["missing_keys"] == []
+        assert results[0]["untranslated_markers"] == ["days.2"]
+
+
+def test_cli_fix_writes_a_wholly_missing_array_as_an_array():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {
+            "en.json": '{\n  "days": ["Monday", "Tuesday"],\n  "title": "Calendar"\n}\n',
+            "de.json": '{\n  "title": "Kalender"\n}\n',
+        })
+        run_cli_err([d, "--base", "en", "--fix"])
+        data = json.load(open(os.path.join(d, "de.json"), encoding="utf-8"))
+        assert isinstance(data["days"], list)
+        assert data["days"] == ["[UNTRANSLATED] Monday", "[UNTRANSLATED] Tuesday"]
+
+
+def test_cli_fix_fills_an_object_inside_an_array():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {
+            "en.json": '{\n  "steps": [\n    {"title": "Cart", "hint": "Review"}\n  ]\n}\n',
+            "de.json": '{\n  "steps": [\n    {"title": "Warenkorb"}\n  ]\n}\n',
+        })
+        code, out, err = run_cli_err([d, "--base", "en", "--fix", "--json"])
+        data = json.load(open(os.path.join(d, "de.json"), encoding="utf-8"))
+        assert data["steps"] == [{"title": "Warenkorb", "hint": "[UNTRANSLATED] Review"}]
+        assert json.loads(out)[0]["missing_keys"] == []
+
+
+def test_cli_fix_numeric_object_keys_still_go_into_the_object():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {
+            "en.json": '{\n  "errors": {\n    "404": "Not found"\n  }\n}\n',
+            "de.json": '{\n  "errors": {}\n}\n',
+        })
+        run_cli_err([d, "--base", "en", "--fix"])
+        data = json.load(open(os.path.join(d, "de.json"), encoding="utf-8"))
+        assert data == {"errors": {"404": "[UNTRANSLATED] Not found"}}
+
+
+def test_cli_fix_leaves_out_a_key_that_would_shadow_a_value_of_another_shape():
+    # de has "nav" as a plain string where the base has an object; writing
+    # a second "nav" member would hide the first from every JSON parser
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {
+            "en.json": '{\n  "nav": {\n    "home": "Home"\n  },\n  "title": "Shop"\n}\n',
+            "de.json": '{\n  "nav": "Navigation"\n}\n',
+        })
+        before = open(os.path.join(d, "de.json"), "rb").read()
+        code, out, err = run_cli_err([d, "--base", "en", "--fix", "--json"])
+        text = open(os.path.join(d, "de.json"), encoding="utf-8").read()
+        assert _top_level_keys(text).count("nav") == 1
+        assert json.loads(text)["title"] == "[UNTRANSLATED] Shop"
+        assert "not inserted" in err and "nav.home" in err
+        assert json.loads(out)[0]["missing_keys"] == ["nav.home"]
+        assert code == 1
+        assert before != text.encode("utf-8")
+
+
+def _atomic_tree(d, second_group):
+    write_tree(d, {
+        "loc/en/common.json": '{"a": "Apple", "b": "Banana"}',
+        "loc/de/common.json": '{"a": "Apfel"}',
+    })
+    write_tree(d, second_group)
+    return os.path.join(d, "loc")
+
+
+def test_cli_fix_writes_nothing_when_a_later_group_will_not_decode():
+    with tempfile.TemporaryDirectory() as d:
+        loc = _atomic_tree(d, {"loc/en/zfooter.json": '{"x": "X", "y": "Yes"}'})
+        with open(os.path.join(loc, "de", "zfooter.json"), "wb") as fh:
+            fh.write(b'{"x": "X\xff"}')
+        common = os.path.join(loc, "de", "common.json")
+        before = open(common, "rb").read()
+        code, out, err = run_cli_err([loc, "--recursive", "--locale-from", "dir", "--fix"])
+        assert code == 2
+        assert "refusing to rewrite" in err
+        assert open(common, "rb").read() == before
+
+
+@requires_yaml
+def test_cli_fix_writes_nothing_when_a_later_group_is_yaml():
+    with tempfile.TemporaryDirectory() as d:
+        loc = _atomic_tree(d, {"loc/en/z.yml": "x: X\ny: Yes\n",
+                               "loc/de/z.yml": "x: X\n"})
+        common = os.path.join(loc, "de", "common.json")
+        before = open(common, "rb").read()
+        code, out, err = run_cli_err([loc, "--recursive", "--locale-from", "dir", "--fix"])
+        assert code == 2
+        assert "doesn't support yaml" in err
+        assert open(common, "rb").read() == before

@@ -45,6 +45,15 @@ Fixed in 0.5.0:
   `"ok": true` in a run that exits 1).
 - The site's install command, usage list and footer license match the README
   again, and the example output uses the paths the CLI actually prints.
+- `--fix` on a JSON array wrote a second `"days"` member holding
+  `{"2": ...}` next to the existing array. JSON parsers keep the last of two
+  duplicate members, so the translations already in the array disappeared.
+  A missing element is now appended to the array, a missing array is written
+  as an array, and a key that could only go in by shadowing a value of
+  another shape is left out and named on stderr.
+- `--fix` works out every write before it makes any. A run that stopped with
+  exit 2 on a later namespace (a file that won't decode, a YAML file) could
+  already have rewritten the files that came before it.
 
 Added in 0.5.0:
 
