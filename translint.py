@@ -196,9 +196,10 @@ def _icu_branch_bodies(style):
 def _icu_scan(value):
     """Find top-level ICU plural/select/selectordinal arguments in value.
     Returns (tokens, spans, bodies): the `{argname}` token for each one, the
-    full span of each argument block (so the flat regexes skip it), and every
-    branch submessage string (so the caller can recurse for nested
-    placeholders). Simple `{name}` arguments are left to the flat brace regex."""
+    full span of each argument block (so the flat regexes skip it), and for
+    each argument the list of its branch submessage strings (so the caller
+    can recurse for nested placeholders). Simple `{name}` arguments are left
+    to the flat brace regex."""
     tokens, spans, bodies = [], [], []
     i = 0
     while i < len(value):
@@ -210,7 +211,7 @@ def _icu_scan(value):
                 if m:
                     tokens.append(f"{{{m.group(1)}}}")
                     spans.append((i, j + 1))
-                    bodies.extend(_icu_branch_bodies(inner[m.end():]))
+                    bodies.append(_icu_branch_bodies(inner[m.end():]))
                     i = j + 1
                     continue
         i += 1
@@ -259,14 +260,18 @@ def extract_placeholders(value):
     # ICU plural/select args first: take the argument name as the token,
     # exclude the whole block from the flat regexes below (so branch-body
     # braces aren't read as their own placeholders), and recurse into each
-    # branch to pick up any nested placeholder.
+    # branch to pick up any nested placeholder. A nested placeholder counts
+    # once per argument however many branches use it, since Arabic has six
+    # plural branches where English has two.
     icu_tokens, icu_spans, icu_bodies = _icu_scan(value)
     if icu_tokens:
         tokens += icu_tokens
         styles_hit.append("icu")
-        for body in icu_bodies:
-            _, sub_tokens = extract_placeholders(body)
-            tokens += list(sub_tokens)
+        for branches in icu_bodies:
+            nested = set()
+            for body in branches:
+                nested.update(extract_placeholders(body)[1])
+            tokens += sorted(nested)
 
     doublebrace_matches = [m for m in _RX_DOUBLEBRACE.finditer(value)
                             if not _spans_contain(icu_spans, m)]

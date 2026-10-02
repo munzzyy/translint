@@ -92,7 +92,9 @@ Fixed in 0.5.0:
 - ICU `plural`/`select`/`selectordinal` arguments count as one placeholder,
   the argument name. The branch text is prose to translate, so a correct
   French translation of the branches no longer reads as a placeholder
-  mismatch or as untranslated.
+  mismatch or as untranslated. A placeholder inside the branches counts once
+  per argument, so Arabic's six plural branches against English's two isn't
+  a mismatch either.
 - `.po` entries that aren't separated by a blank line (msgfmt accepts that)
   no longer merge into one garbage key.
 - A path that exists but has glob characters in its name (`loc[1]`) is used

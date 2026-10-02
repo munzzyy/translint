@@ -2658,3 +2658,21 @@ def test_plural_count_under_another_name_is_optional_only_where_one_number_is_me
     loc["shared.few"] = "عدة مرات"
     r = _plural_check("ar", loc, base)
     assert [m["key"] for m in r["placeholder_mismatches"]] == ["shared.few"]
+
+
+def test_icu_more_plural_branches_than_the_base_is_not_a_mismatch():
+    # Arabic has six plural branches where English has two, and each one
+    # repeats the number; that's one placeholder, not six
+    base = {"r": "{n, plural, =0{No restaurants} =1{1 restaurant} other{{n} restaurants}}"}
+    loc = {"r": "{n, plural, zero{لا مطاعم} one{مطعم واحد} two{مطعمان} "
+                "few{{n} مطاعم} many{{n} مطعمًا} other{{n} مطعم}}"}
+    r = translint.check_locale(base, loc, "ar", "app_ar.arb", "arb")
+    assert r["placeholder_mismatches"] == []
+
+
+def test_icu_nested_placeholder_dropped_from_every_branch_is_a_mismatch():
+    base = {"f": "{count, plural, one{{name} has one file} other{{name} has {count} files}}"}
+    loc = {"f": "{count, plural, one{Eine Datei} other{{count} Dateien}}"}
+    r = translint.check_locale(base, loc, "de", "de.json", "json")
+    assert len(r["placeholder_mismatches"]) == 1
+    assert "{name}" in r["placeholder_mismatches"][0]["base"]

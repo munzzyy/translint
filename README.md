@@ -227,7 +227,9 @@ token `{amount}` and `{{- name}}` is `{{name}}`. Only ICU's own types (`number`,
 `time`, `spellout`, `ordinal`, `duration`) count, so `{a, b}` in ordinary text isn't read
 as a placeholder. For an ICU `plural` or `select`, the argument name is the token and the
 text in each branch is prose to translate, so `one {fichier}` in French doesn't clash
-with `one {file}` in English, while a placeholder inside a branch is still checked.
+with `one {file}` in English, while a placeholder inside a branch is still checked. It
+counts once per argument however many branches repeat it, since Arabic has six plural
+branches where English has two.
 
 A value can mix styles (rare, but not invalid) and every token from every style that
 matched gets included in the comparison. A value with no placeholder syntax at all
