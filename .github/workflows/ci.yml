@@ -38,9 +38,7 @@ jobs:
       - run: python -m pytest tests/ -q
 
   test-yaml:
-    # The matrix above runs without PyYAML so the missing-extra error path
-    # stays covered. Here it's installed, and a YAML test that skips fails
-    # the job instead of passing quietly.
+    # The matrix runs without PyYAML; here a skipped YAML test fails the job.
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -62,8 +60,7 @@ jobs:
           fi
 
   action:
-    # Runs the composite action from this checkout the way a user's workflow
-    # would, on a Rails-style YAML pair, so the yaml input gets exercised.
+    # Runs this checkout's action on a Rails-style YAML pair, with yaml: "true".
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -109,8 +106,7 @@ jobs:
               sys.exit(f"site install command is not in the README: {cmd}")
           print(f"install command matches: {cmd}")
           EOF
-      # The README's example block is presented as real output. Fail the
-      # build when a report() or examples/ change leaves it stale.
+      # The README's example block is shown as real output, so it has to stay real.
       - name: README example output matches the CLI
         run: |
           python3 translint.py examples/locales --base en > "$RUNNER_TEMP/example.txt" || test $? -eq 1

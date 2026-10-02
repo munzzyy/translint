@@ -1540,9 +1540,7 @@ def _fix_json(text, missing_keys, base, base_nested=None, base_tree=None):
     extents = _json_container_extents(text)
     skipped = {}
 
-    # Group by the deepest container that already exists on each key's
-    # path, so two keys under the same new parent share one new object
-    # instead of writing it twice.
+    # Group by the deepest existing container so keys under one new parent share one object.
     groups = {}
     for key in missing_keys:
         placed = _json_place(data, extents, key)
@@ -1552,8 +1550,7 @@ def _fix_json(text, missing_keys, base, base_nested=None, base_tree=None):
         prefix, rest = placed
         groups.setdefault(prefix, []).append((rest, key))
 
-    # Deepest container first (its closing bracket has the lowest index), so
-    # an insertion never shifts a target that hasn't been spliced yet.
+    # Deepest container first (lowest closing index), so a splice never shifts a pending target.
     for prefix in sorted(groups, key=lambda p: extents[p][1], reverse=True):
         obj_open, obj_close, is_object = extents[prefix]
         fallback = indent * (len(prefix) + 1)
