@@ -2137,6 +2137,49 @@ def test_plural_fix_never_stubs_one_into_japanese_and_fills_russian_few():
         assert ru["file_few"] == "[UNTRANSLATED] {{count}} files"
 
 
+EN_NO_ONE = {"installed": "Installed", "installed_other": "{{count}} installed"}
+DE_NO_ONE = {"installed": "Installiert", "installed_other": "{{count}} installiert"}
+
+
+def test_plural_form_the_base_file_leaves_out_is_not_required():
+    r = translint.check_locale(EN_NO_ONE, DE_NO_ONE, "de", "de.json", "json", base_locale="en")
+    assert r["missing_keys"] == [] and r["extra_keys"] == []
+    ru = {"installed": "Установлено", "installed_one": "{{count}} установлен",
+          "installed_other": "{{count}} установлено"}
+    r = translint.check_locale(EN_NO_ONE, ru, "ru", "ru.json", "json", base_locale="en-US")
+    assert r["missing_keys"] == ["installed_few", "installed_many"]
+    assert r["extra_keys"] == []
+
+
+def test_plural_form_the_base_file_has_is_still_required():
+    r = translint.check_locale(EN_PLURAL, {"file_other": "{{count}} Dateien", "title": "Dateien"},
+                               "de", "de.json", "json", base_locale="en")
+    assert r["missing_keys"] == ["file_one"]
+
+
+@pytest.mark.parametrize("base_locale", ["ja", "source", None])
+def test_plural_form_the_base_language_lacks_or_is_unknown_is_still_required(base_locale):
+    base = {"file_other": "{{count}} 個のファイル"}
+    r = translint.check_locale(base, {"file_other": "{{count}} Dateien"}, "de", "de.json", "json",
+                               base_locale=base_locale)
+    assert r["missing_keys"] == ["file_one"]
+
+
+def test_cli_plural_form_the_base_file_leaves_out_is_not_required_or_fixed():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {"en.json": json.dumps(EN_NO_ONE),
+                       "de.json": json.dumps(DE_NO_ONE),
+                       "ru.json": json.dumps({"installed": "Установлено",
+                                              "installed_other": "{{count}} установлено"},
+                                             ensure_ascii=False)})
+        code, out = run_cli([d, "--base", "en", "--json"])
+        r = {x["locale"]: x for x in json.loads(out)}
+        assert r["de"]["missing_keys"] == []
+        assert r["ru"]["missing_keys"] == ["installed_few", "installed_many"]
+        code, out, err = run_cli_err([d, "--base", "en", "--fix", "--dry-run"])
+        assert "installed_one" not in err and "installed_few" in err
+
+
 def test_plural_table_matches_node_intl_pluralrules():
     import shutil
     import subprocess

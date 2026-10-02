@@ -967,7 +967,7 @@ def _key_sort(key):
 
 
 def check_locale(base, locale_dict, locale_name, path, fmt,
-                  do_not_translate=None, allow_identical=None):
+                  do_not_translate=None, allow_identical=None, base_locale=None):
     """Compare one locale's flat {key: value} dict against the base's.
     Returns a result dict matching JSON_SCHEMA_KEYS. Pure function - no I/O,
     so it's the same entry point the CLI and any importer (agent skill,
@@ -980,6 +980,8 @@ def check_locale(base, locale_dict, locale_name, path, fmt,
     entirely (liftmath's IDENTICAL_BY_DESIGN) - for values that legitimately
     render the same in every language (a brand name split across markup,
     a cross-language cognate, a deliberate loanword).
+    base_locale: the base file's locale name. A plural form its language
+    has but the base file leaves out is not required of other locales.
     """
     do_not_translate = do_not_translate or []
     allow_identical = set(allow_identical or [])
@@ -994,13 +996,15 @@ def check_locale(base, locale_dict, locale_name, path, fmt,
     cats = plural_categories(locale_name) if groups else None
     if cats:
         required, allowed = cats
+        base_cats = plural_categories(base_locale) if base_locale else None
+        base_required = base_cats[0] if base_cats else frozenset()
         for other_key, (stem, sep) in groups.items():
             for cat in _PLURAL_CATEGORIES:
                 form = f"{stem}{sep}{cat}"
                 expected.discard(form)
                 if cat in allowed:
                     plural_forms[form] = (other_key, cat)
-                if cat in required:
+                if cat in required and (form in base or cat not in base_required):
                     expected.add(form)
     known = expected | set(plural_forms)
 
@@ -2122,6 +2126,7 @@ def main(argv=None):
                     out.append((group, check_locale(
                         group["base"], {}, locale, f, group["base_fmt"],
                         do_not_translate=do_not_translate, allow_identical=allow_identical,
+                        base_locale=args.base,
                     )))
                     continue
                 try:
@@ -2133,6 +2138,7 @@ def main(argv=None):
                 out.append((group, check_locale(
                     group["base"], locale_dict, locale, f, fmt,
                     do_not_translate=do_not_translate, allow_identical=allow_identical,
+                    base_locale=args.base,
                 )))
         return out
 

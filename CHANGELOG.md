@@ -14,8 +14,12 @@ translint from PyPI before this release, that's the license you got.
 first run on 0.5.0 can report findings 0.4.0 never did. A Russian or Polish
 file with only `_one` and `_other` is missing `_few` and `_many`, an Arabic
 one also `_zero` and `_two`, and a `_one` key in a Japanese, Korean or Chinese
-file is now extra. Those are real findings. If one looks wrong, please open an
-issue with the file.
+file is now extra. The base file still decides which of its own language's
+forms are in use. If `en.json` has `installed_other` and no `installed_one`,
+no locale is asked for `installed_one`. Russian still needs `installed_few`
+and `installed_many`, since English has no such forms to leave out. This goes
+by the language `--base` names, so it takes a name like `en`, not `source`.
+If a finding looks wrong, please open an issue with the file.
 
 Fixed in 0.5.0:
 

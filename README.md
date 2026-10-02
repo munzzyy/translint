@@ -251,6 +251,12 @@ CLDR's plural rules (the language part of the name, so `pt-BR` counts as Portugu
 expects exactly those forms. A Japanese file without `file_one` is complete, a Russian
 `file_few` is not an extra key, and a Russian file without one is missing it.
 
+The base file does matter for the forms its own language has. If `en.json` has
+`installed_other` but no `installed_one`, the app gets by without a `one` form, so no
+locale is asked for `installed_one` and one that has it is not extra. Russian still needs
+`installed_few` and `installed_many`, since English has no such forms to leave out. This
+goes by the language `--base` names, so it takes a name like `en`, not `source`.
+
 Two kinds of form get some slack. `zero` is never extra, because i18next and Rails both
 use it for a count of 0 in any language. It is only required in the languages whose CLDR
 rules have it, like Arabic and Latvian. A form that no whole number up to 1000 falls
