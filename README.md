@@ -212,6 +212,28 @@ matched gets included in the comparison. A value with no placeholder syntax at a
 correctly matches another value with none - most short UI strings never had a placeholder
 to begin with, and that's not a bug.
 
+## Plural keys
+
+i18next writes one key per plural form (`file_one`, `file_other`), and Rails nests them
+(`file:` with `one:` and `other:` under it). Which forms a locale needs depends on its
+language, not on the base file: Japanese only has `other`, Russian has `one`, `few`,
+`many` and `other`, Arabic has all six. translint looks the locale's language up in
+CLDR's plural rules (the language part of the name, so `pt-BR` counts as Portuguese) and
+expects exactly those forms. A Japanese file without `file_one` is complete, a Russian
+`file_few` isn't an extra key, and a Russian file without one is missing it.
+
+Two kinds of form get some slack. `zero` is never required and never extra, because
+i18next and Rails both use it for a count of 0 in any language. A form that no whole
+number up to 1000 falls into, like French `many` (a million and up) or Czech `many`
+(fractions), is allowed but not required.
+
+Every form's placeholders are checked against the base's `other` form. The count can be
+left out of `zero`, `one` and `two` ("One file") and added to any form, but `few`, `many`
+and `other` cover a range of numbers and have to keep it. A lone `_other` key only
+starts a plural set when it has a sibling form or a `{{count}}` in it, so `gender_other`
+next to `gender_male` stays an ordinary key. A locale whose language translint doesn't
+know, and i18next ordinal keys (`_ordinal_one`), get the plain key-by-key comparison.
+
 ## Config
 
 Command-line flags for one-off runs, or drop a `.translintrc.json` next to your locale

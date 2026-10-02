@@ -713,6 +713,137 @@ def _letter_count(s):
 
 
 # ---------------------------------------------------------------------------
+# Plural keys
+#
+# i18next writes one key per CLDR plural category (file_one, file_other),
+# and Rails nests them (file: {one: ..., other: ...}). Which categories a
+# locale needs depends on its language, not on the base: Japanese has only
+# "other", Russian has one/few/many/other. Comparing the sets plainly fails
+# a correct ja file for lacking file_one and calls a correct ru file_few an
+# extra key.
+#
+# The table is CLDR's cardinal categories as Node's Intl.PluralRules reports
+# them (tests/test_translint.py checks it against node when node is on
+# PATH). A category marked "?" is one no whole number from 0 to 1000 picks:
+# French "many" is for a million and up, Czech "many" for fractions. A count
+# in an app is almost always a small whole number, so those are allowed but
+# not required. "other" is always required, and "zero" is always allowed,
+# since i18next and Rails both use a zero key for a count of 0 in every
+# language.
+# ---------------------------------------------------------------------------
+
+_PLURAL_CATEGORIES = ("zero", "one", "two", "few", "many", "other")
+
+_CLDR_PLURALS = {
+    "other": (
+        "bm bo dz hnj id ig ii ja jbo jv kde kea km ko lkt lo ms my nqo "
+        "osa sah ses sg su th to tpi vi wo yo yue zh"
+    ),
+    "one other": (
+        "af ak am an as asa ast az bal bem bez bg bho bn brx ce ceb cgg "
+        "chr ckb csw da de doi dv ee el en eo et eu fa ff fi fil fo fur "
+        "fy gl gsw gu guw ha haw hi hu hy ia ie io is jgo jmc ka kab kaj "
+        "kcg kk kkj kl kn kok ks ksb ku ky lb lg lij ln mas mg mgo mk ml "
+        "mn mr nah nb nd ne nl nn nnh no nr nso ny nyn om or os pa pap "
+        "pcm ps rm rof rwk saq sc sd sdh seh si sn so sq ss ssy st sv sw "
+        "syr ta te teo ti tig tk tn tr ts tzm ug ur uz ve vo vun wa wae "
+        "xh xog yi zu"
+    ),
+    "zero one other": "blo cv ksh lag lv prg",
+    "one two other": "he iu naq sat se sma smi smj smn sms",
+    "one few other": "bs hr ro shi sr",
+    "one many? other": "ca es fr it lld pt scn vec",
+    "one two few other": "dsb gd hsb sl",
+    "one few many other": "be pl ru uk",
+    "one few many? other": "cs lt sk",
+    "one two few many? other": "br gv sgs",
+    "one two few many other": "ga mt",
+    "zero one two few many other": "ar ars cy kw",
+}
+
+
+def _plural_table():
+    out = {}
+    for signature, languages in _CLDR_PLURALS.items():
+        cats = signature.split()
+        required = frozenset(c for c in cats if not c.endswith("?"))
+        allowed = frozenset(c.rstrip("?") for c in cats) | {"zero"}
+        for lang in languages.split():
+            out[lang] = (required, allowed)
+    return out
+
+
+PLURAL_TABLE = _plural_table()
+
+_COUNT_TOKENS = ("{{count}}", "{count}")
+
+
+def plural_categories(locale_name):
+    """(required, allowed) plural categories for a locale name, by its
+    language subtag (pt-BR, zh-Hans and en_US are pt, zh and en), or None
+    for a language the table doesn't know."""
+    lang = re.split(r"[-_.@]", str(locale_name), maxsplit=1)[0].lower()
+    return PLURAL_TABLE.get(lang)
+
+
+def _plural_groups(base):
+    """Every plural set in the base: {stem_other_key: (stem, sep)}. A set is
+    "<stem>_other" (i18next) or a "<stem>.other" whose siblings are all
+    plural categories (Rails, or nested JSON). One "other" on its own only
+    counts when its value has a {{count}}/%{count}, so a "gender_other"
+    next to "gender_male" stays an ordinary key. i18next ordinals
+    (_ordinal_one) use a different table and are left alone."""
+    groups = {}
+    str_keys = [k for k in base if isinstance(k, str)]
+    for key in str_keys:
+        for sep in ("_", "."):
+            suffix = sep + "other"
+            if not key.endswith(suffix) or len(key) == len(suffix):
+                continue
+            stem = key[:-len(suffix)]
+            if sep == "_":
+                if stem.endswith("_ordinal"):
+                    continue
+                siblings = [c for c in _PLURAL_CATEGORIES[:-1] if f"{stem}_{c}" in base]
+            else:
+                rest = [k[len(stem) + 1:] for k in str_keys
+                        if k.startswith(stem + ".") and k != key]
+                if any(r not in _PLURAL_CATEGORIES for r in rest):
+                    continue
+                siblings = rest
+            _, tokens = extract_placeholders(base[key])
+            if siblings or any(t in _COUNT_TOKENS for t in tokens):
+                groups[key] = (stem, sep)
+    return groups
+
+
+def _plural_category(key):
+    """(stem, sep, category) when key ends in a plural category, else None."""
+    if not isinstance(key, str):
+        return None
+    for sep in ("_", "."):
+        for cat in _PLURAL_CATEGORIES:
+            suffix = sep + cat
+            if key.endswith(suffix) and len(key) > len(suffix):
+                return key[:-len(suffix)], sep, cat
+    return None
+
+
+def _plural_form_mismatch(base_other, base_tokens, loc_val, loc_tokens, category):
+    """Placeholder check for one plural form against the base's "other"
+    form. The count may be left out of zero/one/two ("One file", "Eine
+    Datei"), and any form may carry it when the base form doesn't ("{{count}}
+    файл" for Russian one, which also covers 21 and 31). few/many/other
+    stand for a range of numbers and have to keep it."""
+    base_rest = [t for t in base_tokens if t not in _COUNT_TOKENS]
+    loc_rest = [t for t in loc_tokens if t not in _COUNT_TOKENS]
+    if (category in ("few", "many", "other") and len(base_rest) < len(base_tokens)
+            and len(loc_rest) == len(loc_tokens)):
+        return True
+    return _placeholder_mismatch(base_other, base_rest, loc_val, loc_rest)
+
+
+# ---------------------------------------------------------------------------
 # Core check
 # ---------------------------------------------------------------------------
 
@@ -748,16 +879,37 @@ def check_locale(base, locale_dict, locale_name, path, fmt,
     base_keys = set(base.keys())
     locale_keys = set(locale_dict.keys())
 
-    missing_keys = sorted(base_keys - locale_keys, key=_key_sort)
-    extra_keys = sorted(locale_keys - base_keys, key=_key_sort)
+    # Plural sets follow the locale's own CLDR categories (see "Plural keys"
+    # above). plural_forms maps each form this locale may have to the base's
+    # "other" key and the form's category. An unknown language keeps the
+    # plain comparison.
+    expected = set(base_keys)
+    plural_forms = {}
+    groups = _plural_groups(base) if fmt in ("json", "yaml") else {}
+    cats = plural_categories(locale_name) if groups else None
+    if cats:
+        required, allowed = cats
+        for other_key, (stem, sep) in groups.items():
+            for cat in _PLURAL_CATEGORIES:
+                form = f"{stem}{sep}{cat}"
+                expected.discard(form)
+                if cat in allowed:
+                    plural_forms[form] = (other_key, cat)
+                if cat in required:
+                    expected.add(form)
+    known = expected | set(plural_forms)
+
+    missing_keys = sorted(expected - locale_keys, key=_key_sort)
+    extra_keys = sorted(locale_keys - known, key=_key_sort)
 
     placeholder_mismatches = []
     empty_values = []
     untranslated_values = []
     untranslated_markers = []
 
-    for key in sorted(base_keys & locale_keys, key=_key_sort):
-        base_val = base[key]
+    for key in sorted(known & locale_keys, key=_key_sort):
+        form = plural_forms.get(key)
+        base_val = base[key] if key in base else base[form[0]]
         loc_val = locale_dict[key]
 
         if loc_val.strip().startswith(UNTRANSLATED_MARKER):
@@ -779,9 +931,17 @@ def check_locale(base, locale_dict, locale_name, path, fmt,
             empty_values.append(key)
             continue
 
-        _, base_tokens = extract_placeholders(base_val)
-        _, loc_tokens = extract_placeholders(loc_val)
-        if _placeholder_mismatch(base_val, base_tokens, loc_val, loc_tokens):
+        if form:
+            other_val = base[form[0]]
+            _, base_tokens = extract_placeholders(other_val)
+            _, loc_tokens = extract_placeholders(loc_val)
+            mismatch = _plural_form_mismatch(other_val, base_tokens, loc_val,
+                                             loc_tokens, form[1])
+        else:
+            _, base_tokens = extract_placeholders(base_val)
+            _, loc_tokens = extract_placeholders(loc_val)
+            mismatch = _placeholder_mismatch(base_val, base_tokens, loc_val, loc_tokens)
+        if mismatch:
             placeholder_mismatches.append({
                 "key": key,
                 "base": sorted(base_tokens),
@@ -996,7 +1156,13 @@ def _untranslated_value(base_value):
 
 
 def _base_value(base, key):
-    """The base string a missing key is filled in from."""
+    """The base string a missing key is filled in from: its own, or for a
+    plural form the base doesn't have (a Russian file_few against an English
+    base), the base's "other" form."""
+    if key not in base:
+        form = _plural_category(key)
+        if form and f"{form[0]}{form[1]}other" in base:
+            return base[f"{form[0]}{form[1]}other"]
     return base[key]
 
 

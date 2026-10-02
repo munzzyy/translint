@@ -51,6 +51,11 @@ Fixed in 0.5.0:
   A missing element is now appended to the array, a missing array is written
   as an array, and a key that could only go in by shadowing a value of
   another shape is left out and named on stderr.
+- Plural keys follow each locale's own CLDR plural forms. A correct Japanese
+  file failed CI for lacking `file_one`, a correct Russian `file_few` came
+  back as an extra key and its `{{count}}` as a placeholder mismatch, a
+  Russian file missing `file_few` passed, and `--fix` stubbed a `file_one`
+  into `ja.json`. Rails-style nested `one:`/`other:` sets get the same rules.
 - `--fix` works out every write before it makes any. A run that stopped with
   exit 2 on a later namespace (a file that won't decode, a YAML file) could
   already have rewritten the files that came before it.

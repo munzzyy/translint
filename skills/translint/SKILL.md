@@ -43,7 +43,11 @@ parse failure and a lint finding never look the same.
 With `--json`, you get a list of one result object per locale (or a single object if only
 one non-base locale was checked). Each result has:
 
-- `missing_keys` - present in the base, absent here. Add the key.
+- `missing_keys` - present in the base, absent here. Add the key. Plural keys
+  (`file_one`/`file_other`, or Rails `one:`/`other:`) follow the locale's own CLDR plural
+  forms, so a Japanese file only needs `file_other` and a Russian one needs `file_few` and
+  `file_many` even though the English base has neither. The README's
+  [Plural keys](https://github.com/munzzyy/translint#plural-keys) section has the details.
 - `extra_keys` - present here, not in the base. Probably a stale key from a rename;
   confirm before deleting, since the base might just be missing it instead.
 - `placeholder_mismatches` - the interpolation tokens (`{name}`, `{{name}}`, `%s`,

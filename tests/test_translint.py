@@ -1978,3 +1978,189 @@ def test_cli_fix_writes_nothing_when_a_later_group_is_yaml():
         assert code == 2
         assert "doesn't support yaml" in err
         assert open(common, "rb").read() == before
+
+
+# ---------------------------------------------------------------------------
+# Plural keys: each locale needs its own CLDR categories, not the base's
+# ---------------------------------------------------------------------------
+
+EN_PLURAL = {"file_one": "One file", "file_other": "{{count}} files", "title": "Files"}
+
+
+def _plural_check(locale, loc, base=None):
+    return translint.check_locale(base or EN_PLURAL, loc, locale, f"{locale}.json", "json")
+
+
+def test_plural_japanese_needs_only_other():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {"en.json": json.dumps(EN_PLURAL),
+                       "ja.json": json.dumps({"file_other": "{{count}} 個のファイル",
+                                              "title": "ファイル"})})
+        code, out = run_cli([d, "--base", "en", "--strict", "--json"])
+        assert code == 0
+        r = json.loads(out)[0]
+        assert r["missing_keys"] == [] and r["extra_keys"] == []
+
+
+def test_plural_russian_full_set_is_clean_under_strict():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {"en.json": json.dumps(EN_PLURAL),
+                       "ru.json": json.dumps({
+                           "file_one": "{{count}} файл", "file_few": "{{count}} файла",
+                           "file_many": "{{count}} файлов", "file_other": "{{count}} файла",
+                           "title": "Файлы"})})
+        code, out = run_cli([d, "--base", "en", "--strict", "--json"])
+        assert code == 0
+        assert json.loads(out)[0]["placeholder_mismatches"] == []
+
+
+def test_plural_russian_missing_few_is_reported():
+    r = _plural_check("ru", {"file_one": "{{count}} файл", "file_many": "{{count}} файлов",
+                             "file_other": "{{count}} файла", "title": "Файлы"})
+    assert r["missing_keys"] == ["file_few"]
+    assert r["extra_keys"] == []
+
+
+def test_plural_form_dropping_a_placeholder_is_a_mismatch():
+    base = {"file_one": "One file from {{name}}",
+            "file_other": "{{count}} files from {{name}}"}
+    r = _plural_check("ru", {"file_one": "{{count}} файл от {{name}}",
+                             "file_few": "{{count}} файла",
+                             "file_many": "{{count}} файлов от {{name}}",
+                             "file_other": "{{count}} файла от {{name}}"}, base)
+    assert [m["key"] for m in r["placeholder_mismatches"]] == ["file_few"]
+
+
+def test_plural_other_form_still_has_to_keep_the_count():
+    r = _plural_check("de", {"file_one": "Eine Datei", "file_other": "Dateien",
+                             "title": "Dateien"})
+    assert [m["key"] for m in r["placeholder_mismatches"]] == ["file_other"]
+
+
+@pytest.mark.parametrize("locale", ["fr", "es", "it", "pt", "pt-BR", "ca"])
+def test_plural_many_for_large_numbers_is_optional(locale):
+    r = _plural_check(locale, {"file_one": "{{count}} fichier",
+                               "file_other": "{{count}} fichiers", "title": "Fichiers"})
+    assert r["missing_keys"] == [] and r["extra_keys"] == []
+    r = _plural_check(locale, {"file_one": "{{count}} fichier", "file_many": "{{count}} de fichiers",
+                               "file_other": "{{count}} fichiers", "title": "Fichiers"})
+    assert r["missing_keys"] == [] and r["extra_keys"] == []
+
+
+def test_plural_zero_is_never_required_and_never_extra():
+    base = dict(EN_PLURAL, file_zero="No files")
+    r = _plural_check("ja", {"file_other": "{{count}} 個のファイル", "title": "ファイル"}, base)
+    assert r["missing_keys"] == []
+    r = _plural_check("ja", {"file_zero": "ファイルなし", "file_other": "{{count}} 個のファイル",
+                             "title": "ファイル"}, base)
+    assert r["extra_keys"] == []
+
+
+def test_plural_arabic_needs_all_six_and_polish_four():
+    r = _plural_check("ar", {"file_one": "ملف واحد", "file_other": "{{count}} ملف",
+                             "title": "ملفات"})
+    assert r["missing_keys"] == ["file_few", "file_many", "file_two", "file_zero"]
+    r = _plural_check("pl", {"file_one": "{{count}} plik", "file_few": "{{count}} pliki",
+                             "file_many": "{{count}} plików", "file_other": "{{count}} pliku",
+                             "title": "Pliki"})
+    assert r["missing_keys"] == [] and r["extra_keys"] == []
+
+
+def test_plural_japanese_one_form_is_extra():
+    r = _plural_check("ja", {"file_one": "1 個のファイル", "file_other": "{{count}} 個のファイル",
+                             "title": "ファイル"})
+    assert r["extra_keys"] == ["file_one"]
+
+
+@pytest.mark.parametrize("name,lang", [("pt-BR", "pt"), ("zh-Hans", "zh"), ("en_US", "en"),
+                                       ("RU", "ru")])
+def test_plural_categories_resolve_by_language_subtag(name, lang):
+    assert translint.plural_categories(name) == translint.plural_categories(lang)
+    assert translint.plural_categories(name) is not None
+
+
+def test_plural_unknown_language_keeps_the_plain_comparison():
+    assert translint.plural_categories("messages") is None
+    r = _plural_check("messages", {"file_other": "{{count}} x", "title": "x"})
+    assert r["missing_keys"] == ["file_one"]
+
+
+def test_plural_a_lone_other_without_a_count_is_an_ordinary_key():
+    base = {"gender_male": "Male", "gender_other": "Other"}
+    r = _plural_check("ru", {"gender_male": "Мужской", "gender_other": "Другой"}, base)
+    assert r["missing_keys"] == [] and r["extra_keys"] == []
+
+
+def test_plural_ordinal_keys_keep_the_plain_comparison():
+    base = {"place_ordinal_one": "{{count}}st", "place_ordinal_two": "{{count}}nd",
+            "place_ordinal_few": "{{count}}rd", "place_ordinal_other": "{{count}}th"}
+    r = _plural_check("de", {"place_ordinal_other": "{{count}}."}, base)
+    assert r["missing_keys"] == ["place_ordinal_few", "place_ordinal_one", "place_ordinal_two"]
+
+
+def test_plural_nested_rails_style_object():
+    base = {"files.one": "One file", "files.other": "%{count} files"}
+    r = _plural_check("ja", {"files.other": "%{count} 個のファイル"}, base)
+    assert r["missing_keys"] == [] and r["extra_keys"] == []
+    r = _plural_check("ru", {"files.one": "%{count} файл", "files.other": "%{count} файла"}, base)
+    assert r["missing_keys"] == ["files.few", "files.many"]
+
+
+def test_plural_object_with_other_siblings_is_not_a_plural_set():
+    base = {"choice.yes": "Yes", "choice.other": "Something else"}
+    r = _plural_check("ja", {"choice.yes": "はい"}, base)
+    assert r["missing_keys"] == ["choice.other"]
+
+
+@requires_yaml
+def test_plural_nested_yaml_japanese_is_clean():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {"en.yml": "files:\n  one: One file\n  other: '%{count} files'\n",
+                       "ja.yml": "files:\n  other: '%{count} 個のファイル'\n"})
+        code, out = run_cli([d, "--base", "en", "--strict"])
+        assert code == 0, out
+
+
+def test_plural_fix_never_stubs_one_into_japanese_and_fills_russian_few():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {
+            "en.json": json.dumps(EN_PLURAL, indent=2),
+            "ja.json": json.dumps({"file_other": "{{count}} 個のファイル", "title": "ファイル"},
+                                  indent=2, ensure_ascii=False),
+            "ru.json": json.dumps({"file_one": "{{count}} файл", "file_many": "{{count}} файлов",
+                                   "file_other": "{{count}} файла", "title": "Файлы"},
+                                  indent=2, ensure_ascii=False),
+        })
+        code, out, err = run_cli_err([d, "--base", "en", "--fix", "--dry-run"])
+        assert "file_one" not in err
+        assert "ru (" in err and "file_few" in err
+        run_cli_err([d, "--base", "en", "--fix"])
+        ru = json.load(open(os.path.join(d, "ru.json"), encoding="utf-8"))
+        assert ru["file_few"] == "[UNTRANSLATED] {{count}} files"
+
+
+def test_plural_table_matches_node_intl_pluralrules():
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node isn't installed")
+    langs = sorted(translint.PLURAL_TABLE)
+    script = (
+        "const out = {};"
+        "for (const l of JSON.parse(process.argv[1])) {"
+        "  const r = new Intl.PluralRules(l);"
+        "  const used = new Set();"
+        "  for (let n = 0; n <= 1000; n++) used.add(r.select(n));"
+        "  out[l] = [r.resolvedOptions().locale, r.resolvedOptions().pluralCategories,"
+        "            [...used]];"
+        "}"
+        "console.log(JSON.stringify(out));"
+    )
+    res = subprocess.run([node, "-e", script, json.dumps(langs)],
+                         capture_output=True, text=True, check=True)
+    for lang, (resolved, cats, used) in json.loads(res.stdout).items():
+        assert resolved.split("-")[0] == lang, lang
+        required, allowed = translint.PLURAL_TABLE[lang]
+        assert allowed == set(cats) | {"zero"}, lang
+        assert required == {c for c in cats if c in used or c == "other"}, lang
