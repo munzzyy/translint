@@ -2803,3 +2803,224 @@ def test_plural_base_with_a_count_never_takes_another_token_as_the_count():
                              "file_many": "{{count}} файлов от {{name}}",
                              "file_other": "{{count}} файла от {{name}}"}, base)
     assert [m["key"] for m in r["placeholder_mismatches"]] == ["file_few"]
+
+
+# ---------------------------------------------------------------------------
+# gettext: a .pot base, and plural forms checked the way msgfmt -c does
+# ---------------------------------------------------------------------------
+
+PO_DE_FORMS = "nplurals=2; plural=(n != 1);"
+PO_RU_FORMS = ("nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && "
+               "(n%100<10 || n%100>=20) ? 1 : 2);")
+
+
+def _po_header(forms=None):
+    text = 'msgid ""\nmsgstr ""\n"Content-Type: text/plain; charset=UTF-8\\n"\n'
+    if forms:
+        text += f'"Plural-Forms: {forms}\\n"\n'
+    return text + "\n"
+
+
+def _po_plural(msgid, plural, forms, flag="c-format"):
+    lines = [f"#, {flag}"] if flag else []
+    lines += [f'msgid "{msgid}"', f'msgid_plural "{plural}"']
+    lines += [f'msgstr[{i}] "{form}"' for i, form in enumerate(forms)]
+    return "\n".join(lines) + "\n"
+
+
+def _msgfmt_verdict(path):
+    import shutil
+    import subprocess
+    msgfmt = shutil.which("msgfmt")
+    if msgfmt is None:
+        pytest.skip("msgfmt isn't installed")
+    return subprocess.run([msgfmt, "-c", "-o", os.devnull, path],
+                          capture_output=True).returncode == 0
+
+
+def test_pot_base_checks_each_translation_against_its_msgid():
+    code, out = run_cli([os.path.join(FIXTURES, "po_pot"), "--base", "messages", "--json"])
+    assert code == 1
+    (de,) = json.loads(out)
+    assert de["placeholder_mismatches"] == [
+        {"key": "You have %d files", "base": ["%d"], "locale": []}
+    ]
+    assert de["empty_values"] == ["Save"]
+    assert de["missing_keys"] == [] and de["extra_keys"] == []
+
+
+def test_pot_base_flags_a_msgstr_left_as_the_msgid():
+    base = translint.parse_po('msgid "Settings"\nmsgstr ""\n', "messages.pot")
+    loc = translint.parse_po('msgid "Settings"\nmsgstr "Settings"\n', "de.po")
+    r = translint.check_locale(base, loc, "de", "de.po", "po")
+    assert r["untranslated_values"] == ["Settings"]
+
+
+# Each verdict matches msgfmt -c from GNU gettext 1.0, which the next test re-checks.
+PO_PLURAL_ORACLE = [
+    ("de-many-drops-count.po", False),
+    ("de-clean.po", True),
+    ("de-one-drops-count.po", True),
+    ("de-many-wrong-type.po", False),
+    ("ja-clean.po", True),
+    ("ja-drops-count.po", False),
+    ("ru-one-drops-count.po", False),
+    ("ru-clean.po", True),
+]
+
+
+@pytest.mark.parametrize("name,clean", PO_PLURAL_ORACLE)
+def test_po_plural_forms_match_msgfmt(name, clean):
+    pot = os.path.join(FIXTURES, "po_plural", "messages.pot")
+    code, out = run_cli([pot, os.path.join(FIXTURES, "po_plural", name),
+                         "--base", "messages", "--json"])
+    (r,) = json.loads(out)
+    assert r["missing_keys"] == [] and r["empty_values"] == []
+    assert r["ok"] is clean
+    assert [m["key"] for m in r["placeholder_mismatches"]] == ([] if clean else ["One file"])
+    assert code == (0 if clean else 1)
+
+
+@pytest.mark.parametrize("name,clean", PO_PLURAL_ORACLE)
+def test_po_plural_oracle_fixtures_agree_with_msgfmt(name, clean):
+    assert _msgfmt_verdict(os.path.join(FIXTURES, "po_plural", name)) is clean
+
+
+@pytest.mark.parametrize("forms_header,msgid,plural,forms,clean", [
+    # a one-number form may drop an argument, but not change the type of one it keeps
+    (PO_DE_FORMS, "%s: one file", "%s: %d files", ["%d: eine Datei", "%s: %d Dateien"], False),
+    # or use argument 2 without argument 1
+    (PO_DE_FORMS, "%s: one file", "%s: %d files", ["%2$d Datei", "%s: %d Dateien"], False),
+    (PO_DE_FORMS, "One file", "%d files", ["%d Datei %s", "%d Dateien"], False),
+    (PO_DE_FORMS, "%s has one file", "%s has %d files",
+     ["%1$s hat eine Datei", "%s hat %d Dateien"], True),
+    ("nplurals=2; plural=(n > 1);", "One file", "%d files", ["Un fichier", "%d fichiers"], True),
+    ("nplurals=6; plural=(n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 && n%100<=10 ? 3 "
+     ": n%100>=11 ? 4 : 5);", "One file", "%d files",
+     ["لا ملفات", "ملف واحد", "ملفان", "%d ملفات", "%d ملفًا", "%d ملف"], True),
+    # the strict cutoff is five of the numbers 0 to 1000: 996..1000 is five, 997..1000 four
+    ("nplurals=2; plural=(n >= 996 ? 0 : 1);", "One file", "%d files",
+     ["Eine Datei", "%d Dateien"], False),
+    ("nplurals=2; plural=(n >= 997 ? 0 : 1);", "One file", "%d files",
+     ["Eine Datei", "%d Dateien"], True),
+])
+def test_po_plural_edge_cases_match_msgfmt(forms_header, msgid, plural, forms, clean):
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {
+            "messages.pot": _po_header() + _po_plural(msgid, plural, ["", ""]),
+            "xx.po": _po_header(forms_header) + _po_plural(msgid, plural, forms),
+        })
+        code, out = run_cli([d, "--base", "messages", "--json"])
+        assert json.loads(out)[0]["ok"] is clean
+        assert _msgfmt_verdict(os.path.join(d, "xx.po")) is clean
+
+
+@pytest.mark.parametrize("one,clean", [
+    ("Eine Datei in %(dir)s", True),
+    ("Eine Datei in %(folder)s", False),
+])
+def test_po_plural_python_format_one_form_may_drop_but_not_add_a_name(one, clean):
+    entry = _po_plural("One file in %(dir)s", "%(num)d files in %(dir)s",
+                       [one, "%(num)d Dateien in %(dir)s"], flag="python-format")
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {
+            "messages.pot": _po_header() + _po_plural(
+                "One file in %(dir)s", "%(num)d files in %(dir)s", ["", ""], flag="python-format"),
+            "de.po": _po_header(PO_DE_FORMS) + entry,
+        })
+        code, out = run_cli([d, "--base", "messages", "--json"])
+        assert json.loads(out)[0]["ok"] is clean
+        assert _msgfmt_verdict(os.path.join(d, "de.po")) is clean
+
+
+def test_po_plural_without_a_plural_forms_header_checks_no_form_strictly():
+    # msgfmt -c fails this file for the missing header, not for the dropped %d
+    base = translint.parse_po(_po_plural("One file", "%d files", ["", ""]), "messages.pot")
+    loc = translint.parse_po(_po_header() + _po_plural(
+        "One file", "%d files", ["Eine Datei", "Dateien"]), "de.po")
+    assert translint.check_locale(base, loc, "de", "de.po", "po")["placeholder_mismatches"] == []
+
+
+def test_po_plural_with_an_empty_form_is_an_empty_value():
+    base = translint.parse_po(_po_plural("One file", "%d files", ["", ""]), "messages.pot")
+    loc = translint.parse_po(_po_header(PO_DE_FORMS) + _po_plural(
+        "One file", "%d files", ["Eine Datei", ""]), "de.po")
+    r = translint.check_locale(base, loc, "de", "de.po", "po")
+    assert r["empty_values"] == ["One file"] and r["placeholder_mismatches"] == []
+
+
+def test_po_key_id_base_plural_uses_its_own_msgstr_forms():
+    base = translint.parse_po(_po_plural("app.files", "app.files.plural",
+                                         ["One file", "%d files"]), "en.po")
+    de = translint.parse_po(_po_header(PO_DE_FORMS) + _po_plural(
+        "app.files", "app.files.plural", ["Eine Datei", "%d Dateien"]), "de.po")
+    ru = translint.parse_po(_po_header(PO_RU_FORMS) + _po_plural(
+        "app.files", "app.files.plural", ["Один файл", "%d файла", "%d файлов"]), "ru.po")
+    assert translint.check_locale(base, de, "de", "de.po", "po")["ok"] is True
+    r = translint.check_locale(base, ru, "ru", "ru.po", "po")
+    assert r["placeholder_mismatches"] == [{"key": "app.files", "base": ["%d"], "locale": []}]
+
+
+@pytest.mark.parametrize("expr,values", [
+    ("(n != 1)", [1, 0, 1, 1, 1, 1]),
+    (PO_RU_FORMS.split("plural=")[1].rstrip(";"), [2, 0, 1, 2, 2, 0]),
+    ("n==1 ? 0 : n==2 ? 1 : 2", [2, 0, 1, 2, 2, 2]),
+    ("!(n%10) || n == 1 && n > 4", [1, 0, 0, 0, 0, 0]),
+    ("2 + 3 * n - 1", [1, 4, 7, 16, 34, 64]),
+    ("0", [0, 0, 0, 0, 0, 0]),
+])
+def test_plural_function_follows_c_precedence(expr, values):
+    f = translint.plural_function(expr)
+    assert [f(n) for n in (0, 1, 2, 5, 11, 21)] == values
+
+
+@pytest.mark.parametrize("expr", [
+    "", "n +", "(n", "n)", "n ? 1", "nn", "EXPRESSION", "__import__('os').system('true')",
+    "n " + "+ n " * 600, "(" * 300 + "n" + ")" * 300,
+])
+def test_plural_function_refuses_anything_but_the_grammar(expr):
+    assert translint.plural_function(expr) is None
+
+
+def test_plural_forms_header_with_a_division_by_zero_checks_no_form_strictly():
+    assert translint._po_strict_forms("Plural-Forms: nplurals=2; plural=n/0;") is None
+    assert translint._po_strict_forms(f"Plural-Forms: {PO_RU_FORMS}") == {0, 1, 2}
+    assert translint._po_strict_forms(f"Plural-Forms: {PO_DE_FORMS}") == {1}
+
+
+def test_parse_po_keeps_plural_forms_and_flags_beside_msgstr_zero():
+    text = _po_header(PO_DE_FORMS) + _po_plural("One file", "%d files", ["Eine Datei", "%d Dateien"])
+    catalog = translint.parse_po(text, "de.po")
+    assert catalog == {"One file": "Eine Datei"}
+    entry = catalog.entries["One file"]
+    assert entry["msgid_plural"] == "%d files"
+    assert entry["msgstr"] == ["Eine Datei", "%d Dateien"]
+    assert entry["flags"] == ["c-format"]
+    assert translint.po_plural_forms(catalog.header)[0] == 2
+
+
+@pytest.mark.parametrize("forms_header,count", [
+    (PO_RU_FORMS, 3), (None, 2), ("nplurals=1; plural=0;", 1), ("nplurals=1000; plural=0;", 2),
+])
+def test_cli_fix_po_writes_one_msgstr_per_plural_form(forms_header, count):
+    pot = (_po_header() + _po_plural("One file", "%d files", ["", ""]) + "\n"
+           + '#, python-format\nmsgid "Hi %(name)s"\nmsgstr ""\n')
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "xx.po")
+        write_tree(d, {"messages.pot": pot, "xx.po": _po_header(forms_header)})
+        run_cli_err([d, "--base", "messages", "--fix"])
+        text = open(path, encoding="utf-8").read()
+        assert ('#, fuzzy, c-format\nmsgid "One file"\nmsgid_plural "%d files"\n'
+                + "".join(f'msgstr[{i}] ""\n' for i in range(count))) in text
+        assert f"msgstr[{count}]" not in text
+        assert '#, fuzzy, python-format\nmsgid "Hi %(name)s"\nmsgstr ""\n' in text
+        assert _msgfmt_accepts(path)
+        run_cli_err([d, "--base", "messages", "--fix"])
+        assert open(path, encoding="utf-8").read() == text
+
+
+def test_fix_po_plural_from_a_key_id_base_starts_from_its_forms():
+    base = translint.parse_po(_po_plural("app.files", "app.files.plural",
+                                         ["One file", "%d files"]), "en.po")
+    text = translint.fix_missing_keys_po(_po_header(PO_RU_FORMS), ["app.files"], base)
+    assert text.endswith('msgstr[0] "One file"\nmsgstr[1] "%d files"\nmsgstr[2] "%d files"\n')

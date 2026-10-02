@@ -166,11 +166,22 @@ empty:
   keys (`{"app.title": "..."}`) are supported; nested files get flattened to dotted keys
   for comparison, so a nested base and a flat translation (or vice versa) still compare
   correctly key-for-key.
-- **gettext .po / .pot** - `msgid`/`msgstr` pairs, multi-line strings, and plural forms
-  (`msgstr[0]` is compared against `msgid` the same way a singular translation would be;
-  `msgstr[1..]` are the plural variants and are not diffed against the singular `msgid`).
-  No `polib` dependency - it's plain text parsing plus `json.loads` for unescaping the
-  quoted string literals, since `.po`'s C-style escaping is a subset of JSON's.
+- **gettext .po / .pot** - `msgid`/`msgstr` pairs, `msgctxt`, multi-line strings and
+  plural forms. A translation is checked against the base file's `msgstr` when it has
+  one, which is how a file keyed by IDs (`msgid "app.title"`) works. When the base
+  `msgstr` is empty, as in a `.pot` template or an `en.po` that uses the English text as
+  its msgids, the translation is checked against the `msgid` itself, so `--base messages`
+  makes `messages.pot` the base for `de.po` and the rest. Plural forms are checked the
+  way `msgfmt -c` checks them: every `msgstr[n]` against `msgid_plural`, with the locale
+  file's `Plural-Forms` formula deciding which forms have to keep every placeholder. A
+  form the formula picks for only a handful of numbers (fewer than five from 0 to 1000,
+  `msgfmt`'s own cutoff), like German's `n == 1`, may leave one out, so "Eine Datei" is
+  fine for "%d files". Russian's first form also covers 21 and 31, so it has to keep the
+  `%d`. A file with no `Plural-Forms` header gets that slack on every form, as it does in
+  `msgfmt`, which fails the file for the missing header instead. No `polib` dependency -
+  it's plain text parsing plus `json.loads` for unescaping the quoted string literals,
+  since `.po`'s C-style escaping is a subset of JSON's, and the formula is parsed by hand
+  rather than handed to `eval`.
 - **Java .properties** - `key=value` or `key:value`, comments (`#`/`!`), and backslash
   line continuations.
 - **YAML** (`.yml` / `.yaml`) - the default Rails i18n layout (`config/locales/en.yml`)
@@ -386,6 +397,11 @@ to charge {amount}`:
   the file, though, and a second `msgid` makes `msgfmt` refuse the whole file. `--fix`
   leaves those alone and names them on stderr, which is also why a second `--fix` run
   does not add the same entry again.
+
+  A plural entry gets its `msgid_plural` and one `msgstr[n]` for each form the file's
+  `Plural-Forms` header asks for, or two if it has no header. A format flag on the base
+  entry, like `c-format`, goes on the new one too, next to `fuzzy`. With a `.pot` as the
+  base there is no English `msgstr` to copy, so the new `msgstr` is empty.
 
 What it will never do, on purpose:
 

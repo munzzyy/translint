@@ -31,7 +31,9 @@ Point `paths` at the directory holding the locale files (or list specific files)
 reference every other locale gets checked against. Format is auto-detected from the
 extension (`.json`, `.po`/`.pot`, `.properties`, `.yml`/`.yaml`, Flutter's `.arb`); pass
 `--format` to force one. YAML needs PyYAML (`pip install translint[yaml]`); without it a
-`.yml` file exits 2 with a message saying so.
+`.yml` file exits 2 with a message saying so. A gettext `.pot` template works as the base
+(`--base messages` for `messages.pot`): where the base `msgstr` is empty, the translation
+is checked against the `msgid`.
 
 No `--json`? You get the same information as a grouped human-readable report instead,
 which is easier to skim but not something to parse.
@@ -57,7 +59,9 @@ only one was checked. Each result has:
   This is the one that actually crashes at runtime - a dropped or renamed placeholder
   throws a `KeyError`/`IndexError`/`undefined` the first time that string renders with
   real data. Each entry shows `base` and `locale` token lists so you can see exactly what
-  differs.
+  differs. A gettext plural form that the file's `Plural-Forms` formula uses for only
+  a few numbers (German's `n == 1`) may leave placeholders out, the same slack
+  `msgfmt -c` gives it.
 - `empty_values` - the key exists but the value is blank.
 - `untranslated_values` - the value is byte-identical to the base after stripping
   placeholders, punctuation, and any configured do-not-translate tokens. This is a

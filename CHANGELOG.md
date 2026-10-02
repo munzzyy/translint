@@ -121,6 +121,20 @@ Fixed in 0.5.0:
   not a missing key.
 - pyproject.toml lost a leftover non-commercial license classifier that
   contradicted the license.
+- A gettext `.pot` template works as the base. With `messages.pot` and
+  `de.po`, every translation was checked against the template's empty
+  `msgstr`, so "Hallo %s" failed for having a `%s` while a translation that
+  dropped its `%d`, or an empty one, passed. An entry whose base `msgstr` is
+  empty is now checked against its `msgid`.
+- `.po` plural forms are checked the way `msgfmt -c` checks them. Only
+  `msgstr[0]` was looked at, and against the singular, so a correct Japanese
+  `%d 個のファイル` failed and a German `msgstr[1]` without its `%d` passed.
+  Every form is checked against `msgid_plural` now, and the locale's
+  `Plural-Forms` formula decides which forms may leave a placeholder out:
+  German's `n == 1` form may, Russian's first form, which also covers 21
+  and 31, may not. `--fix` writes a missing plural entry with its
+  `msgid_plural`, one `msgstr[n]` per form and the base entry's `c-format`
+  flag.
 
 Added in 0.5.0:
 

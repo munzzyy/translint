@@ -560,21 +560,42 @@ def parse_properties(text, path):
     return out
 
 
+class PoCatalog(dict):
+    """What parse_po returns: {key: msgstr} like every other parser, with a
+    plural entry's msgstr[0] as its value. entries holds each live entry's
+    msgid_plural (None when it has none), every msgstr form and its flags,
+    and header is the header entry's msgstr, for the plural check and
+    --fix."""
+
+    def __init__(self):
+        super().__init__()
+        self.entries = {}
+        self.header = ""
+
+
 def parse_po(text, path):
     """gettext .po: msgid/msgstr pairs. Multi-line strings (adjacent quoted
-    literals) are concatenated. Plural forms (msgid_plural/msgstr[n]) use
-    msgstr[0] as the value to check, since that's the form that corresponds
-    to msgid the same way a singular translation would - msgstr[1..] are
-    the plural variants and aren't compared against msgid directly. Entries
-    with an empty msgid (the .po header block) are skipped. Fuzzy (#, fuzzy)
-    and obsolete (#~) entries are skipped since they aren't live
-    translations - msgfmt doesn't compile either.
+    literals) are concatenated. A plural entry (msgid_plural/msgstr[n]) is
+    msgstr[0] in the returned dict, and its msgid_plural and other forms
+    are in the catalog's entries for the plural check. Entries with an
+    empty msgid (the .po header block) are skipped. Fuzzy (#, fuzzy) and
+    obsolete (#~) entries are skipped since they aren't live translations
+    - msgfmt doesn't compile either.
 
     An entry carrying msgctxt is keyed by (msgctxt, msgid) instead of the
     bare msgid, so two context-disambiguated entries sharing one msgid
     (a "Close" verb vs a "Close" adjective) don't collide - without this,
     the second parsed entry silently overwrites the first."""
-    return {key: msgstr for key, msgstr, state in _po_entries(text) if state == "live"}
+    catalog = PoCatalog()
+    for record in _po_records(text):
+        if record["key"] is None:
+            # msgfmt reads Plural-Forms from a fuzzy header too
+            if record["state"] != "obsolete":
+                catalog.header = record["msgstr"][0]
+        elif record["state"] == "live":
+            catalog[record["key"]] = record["msgstr"][0]
+            catalog.entries[record["key"]] = record
+    return catalog
 
 
 def _po_entries(text):
@@ -582,6 +603,18 @@ def _po_entries(text):
     "live", "fuzzy" or "obsolete". parse_po keeps the live ones; --fix
     needs the others too, since gettext refuses a file that defines the
     same msgid twice even when one copy is fuzzy or obsolete."""
+    for record in _po_records(text):
+        if record["key"] is not None:
+            yield record["key"], record["msgstr"][0], record["state"]
+
+
+_RX_PO_MSGSTR_N = re.compile(r"^msgstr\[(\d+)\]\s*(.*)$")
+
+
+def _po_records(text):
+    """Every entry in a .po file as a dict of key, msgid_plural (None for
+    a singular entry), msgstr (a list, one string per msgstr[n]), flags and
+    state. The header entry has key None."""
     def is_fuzzy_flag(line):
         # "#," starts gettext's flag comment; fuzzy has to be one of the
         # comma-separated flags there. The word "fuzzy" inside a translator
@@ -645,13 +678,22 @@ def _po_entries(text):
             state = "fuzzy"
         else:
             state = "live"
-        msgid_parts, msgstr_parts, msgctxt_parts = [], [], []
+        msgid_parts, msgctxt_parts, plural_parts = [], [], None
+        forms = {}
+        flags = []
         target = None
         for line in entry:
+            if line.startswith("#,"):
+                flags += [f.strip() for f in line[2:].split(",") if f.strip()]
+                continue
             if line.startswith("#"):
                 continue
             if line.startswith("msgid_plural"):
-                target = None
+                plural_parts = []
+                target = plural_parts
+                rest = line[len("msgid_plural"):].strip()
+                if rest:
+                    plural_parts.append(rest)
                 continue
             if line.startswith("msgctxt "):
                 target = msgctxt_parts
@@ -667,29 +709,36 @@ def _po_entries(text):
             if line.startswith("msgid"):
                 target = msgid_parts
                 continue
-            if re.match(r'^msgstr\[0\]', line):
-                target = msgstr_parts
-                rest = re.sub(r'^msgstr\[0\]\s*', '', line)
-                msgstr_parts.append(rest)
-                continue
-            if re.match(r'^msgstr\[\d+\]', line):
-                target = None  # msgstr[1..]: plural variants, not compared
+            m = _RX_PO_MSGSTR_N.match(line)
+            if m:
+                target = forms.setdefault(int(m.group(1)), [])
+                target.append(m.group(2))
                 continue
             if line.startswith("msgstr "):
-                target = msgstr_parts
-                msgstr_parts.append(line[len("msgstr "):].strip())
+                target = forms.setdefault(0, [])
+                target.append(line[len("msgstr "):].strip())
                 continue
             if line.startswith("msgstr"):
-                target = msgstr_parts
+                target = forms.setdefault(0, [])
                 continue
             if line.startswith('"') and target is not None:
                 target.append(line)
         msgid = "".join(unquote(p) for p in msgid_parts)
-        msgstr = "".join(unquote(p) for p in msgstr_parts)
         msgctxt = "".join(unquote(p) for p in msgctxt_parts)
         if msgid == "":
-            continue  # header block
-        yield (msgctxt, msgid) if msgctxt else msgid, msgstr, state
+            if msgctxt:
+                continue
+            key = None
+        else:
+            key = (msgctxt, msgid) if msgctxt else msgid
+        yield {
+            "key": key,
+            "msgid_plural": (None if plural_parts is None
+                             else "".join(unquote(p) for p in plural_parts)),
+            "msgstr": ["".join(unquote(p) for p in forms[i]) for i in sorted(forms)] or [""],
+            "flags": flags,
+            "state": state,
+        }
 
 
 def parse_arb(text, path):
@@ -952,6 +1001,206 @@ def _plural_form_mismatch(base, key, other_key, category, loc_val, loc_tokens):
 
 
 # ---------------------------------------------------------------------------
+# gettext plural forms, checked against msgid_plural the way msgfmt -c does
+# ---------------------------------------------------------------------------
+
+_RX_PLURAL_TOKEN = re.compile(r"\s*(\d+|n|\|\||&&|==|!=|<=|>=|[?:<>+\-*/%!()])")
+_PLURAL_LEVELS = (("||",), ("&&",), ("==", "!="), ("<", ">", "<=", ">="),
+                  ("+", "-"), ("*", "/", "%"))
+_ULONG = (1 << 64) - 1
+_PLURAL_OPS = {
+    "||": lambda a, b: lambda n: 1 if a(n) or b(n) else 0,
+    "&&": lambda a, b: lambda n: 1 if a(n) and b(n) else 0,
+    "==": lambda a, b: lambda n: int(a(n) == b(n)),
+    "!=": lambda a, b: lambda n: int(a(n) != b(n)),
+    "<": lambda a, b: lambda n: int(a(n) < b(n)),
+    ">": lambda a, b: lambda n: int(a(n) > b(n)),
+    "<=": lambda a, b: lambda n: int(a(n) <= b(n)),
+    ">=": lambda a, b: lambda n: int(a(n) >= b(n)),
+    "+": lambda a, b: lambda n: (a(n) + b(n)) & _ULONG,
+    "-": lambda a, b: lambda n: (a(n) - b(n)) & _ULONG,
+    "*": lambda a, b: lambda n: (a(n) * b(n)) & _ULONG,
+    "/": lambda a, b: lambda n: a(n) // b(n),
+    "%": lambda a, b: lambda n: a(n) % b(n),
+}
+# The longest real formula (Arabic's) is about 110 characters.
+_PLURAL_EXPR_MAX = 1000
+
+
+def plural_function(expr):
+    """Compile a Plural-Forms plural= expression into a function of n, or
+    return None if it isn't one. The grammar is gettext's: ?:, ||, &&, the
+    comparisons, + - * / %, !, n, integers and parentheses, on unsigned
+    integers. It's parsed here by hand because the header is file content
+    and never goes near eval. A division by zero raises ZeroDivisionError
+    when the function runs."""
+    if len(expr) > _PLURAL_EXPR_MAX:
+        return None
+    tokens = []
+    pos = 0
+    expr = expr.rstrip()
+    while pos < len(expr):
+        m = _RX_PLURAL_TOKEN.match(expr, pos)
+        if not m:
+            return None
+        tokens.append(m.group(1))
+        pos = m.end()
+    i = 0
+
+    def peek():
+        return tokens[i] if i < len(tokens) else None
+
+    def take(expected=None):
+        nonlocal i
+        tok = peek()
+        if tok is None or (expected is not None and tok != expected):
+            raise ValueError(expr)
+        i += 1
+        return tok
+
+    def ternary():
+        cond = binary(0)
+        if peek() != "?":
+            return cond
+        take("?")
+        yes = ternary()
+        take(":")
+        no = ternary()
+        return lambda n: yes(n) if cond(n) else no(n)
+
+    def binary(level):
+        if level == len(_PLURAL_LEVELS):
+            return unary()
+        left = binary(level + 1)
+        while peek() in _PLURAL_LEVELS[level]:
+            left = _PLURAL_OPS[take()](left, binary(level + 1))
+        return left
+
+    def unary():
+        if peek() == "!":
+            take("!")
+            operand = unary()
+            return lambda n: 0 if operand(n) else 1
+        tok = take()
+        if tok == "n":
+            return lambda n: n
+        if tok.isdigit():
+            value = int(tok) & _ULONG
+            return lambda n: value
+        if tok == "(":
+            inner = ternary()
+            take(")")
+            return inner
+        raise ValueError(expr)
+
+    try:
+        function = ternary()
+    except (ValueError, RecursionError):
+        return None
+    return function if i == len(tokens) else None
+
+
+_RX_NPLURALS = re.compile(r"\bnplurals\s*=\s*(\d+)")
+_RX_PLURAL_EXPR = re.compile(r"\bplural\s*=\s*([^;]*)")
+
+
+def po_plural_forms(header):
+    """(nplurals, plural function) from a .po header's Plural-Forms line.
+    Either is None when it's missing or not valid, as in a .pot's
+    "nplurals=INTEGER; plural=EXPRESSION;" placeholder."""
+    for line in header.split("\n"):
+        name, _, value = line.partition(":")
+        if name.strip().lower() != "plural-forms":
+            continue
+        m = _RX_NPLURALS.search(value)
+        nplurals = int(m.group(1)) if m else None
+        m = _RX_PLURAL_EXPR.search(value)
+        return nplurals, (plural_function(m.group(1)) if m else None)
+    return None, None
+
+
+def _po_strict_forms(header):
+    """The msgstr[n] indexes msgfmt -c holds to every placeholder of
+    msgid_plural: the forms the header's formula picks for at least five of
+    the numbers 0 to 1000. A form picked for fewer means one number, like
+    German's n == 1, and may say "Eine Datei" for "%d files". Russian's
+    first form also covers 21 and 31, so it has to keep the %d. None
+    without a usable formula, in which case msgfmt checks no form strictly
+    once there are two or more."""
+    nplurals, plural = po_plural_forms(header)
+    if nplurals is None or plural is None:
+        return None
+    hits = {}
+    try:
+        for n in range(1001):
+            form = plural(n)
+            if form < nplurals:
+                hits[form] = hits.get(form, 0) + 1
+    except (ZeroDivisionError, RecursionError):
+        return None
+    return {form for form, count in hits.items() if count >= 5}
+
+
+def _printf_arguments(value):
+    """{argument number: printf token without its %N$} - a numbered %2$d
+    is argument 2 wherever it sits, and each bare %s takes the next one."""
+    numbered, bare = {}, {}
+    for m in _RX_PRINTF.finditer(value):
+        token = m.group(0)
+        num = _RX_PRINTF_ARGNUM.match(token)
+        if num:
+            numbered[int(token[1:num.end() - 1])] = "%" + token[num.end():]
+        else:
+            bare[len(bare) + 1] = token
+    return numbered or bare
+
+
+def _placeholder_subset_mismatch(base_val, base_tokens, loc_val, loc_tokens):
+    """_placeholder_mismatch for a plural form that stands for one number:
+    it may leave placeholders out, but not add one, skip a printf argument
+    it uses a later one of, or give an argument a different conversion."""
+    extra = list(_strip_printf_argnums(loc_tokens))
+    for token in _strip_printf_argnums(base_tokens):
+        if token in extra:
+            extra.remove(token)
+    if extra:
+        return True
+    loc_args = _printf_arguments(loc_val)
+    if loc_args and max(loc_args) != len(loc_args):
+        return True
+    base_args = _printf_arguments(base_val)
+    return any(base_args.get(i) != token for i, token in loc_args.items())
+
+
+def _po_reference(base, key):
+    """(singular, plural) for checking a .po entry: the base's own msgstr
+    when it has one (msgid "app.title" files), else the msgid and
+    msgid_plural, as in a .pot. plural is None for a singular entry, and
+    for the base's msgstr it's the base's last form."""
+    entry = getattr(base, "entries", {}).get(key)
+    plural = entry["msgid_plural"] if entry else None
+    if base[key]:
+        if plural is None:
+            return base[key], None
+        return base[key], [form for form in entry["msgstr"] if form][-1]
+    return (key[1] if isinstance(key, tuple) else key), plural
+
+
+def _po_form_mismatch(reference, forms, strict_forms):
+    """(base tokens, locale tokens) for the first msgstr[n] whose
+    placeholders don't fit the plural reference, or None. A lone form is
+    always held to all of them, the way msgfmt -c does it."""
+    _, ref_tokens = extract_placeholders(reference)
+    for index, form in enumerate(forms):
+        _, tokens = extract_placeholders(form)
+        strict = len(forms) == 1 or (strict_forms is not None and index in strict_forms)
+        check = _placeholder_mismatch if strict else _placeholder_subset_mismatch
+        if check(reference, ref_tokens, form, tokens):
+            return ref_tokens, tokens
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Core check
 # ---------------------------------------------------------------------------
 
@@ -1015,11 +1264,19 @@ def check_locale(base, locale_dict, locale_name, path, fmt,
     empty_values = []
     untranslated_values = []
     untranslated_markers = []
+    strict_forms = _po_strict_forms(getattr(locale_dict, "header", "")) if fmt == "po" else None
 
     for key in sorted(known & locale_keys, key=_key_sort):
         form = plural_forms.get(key)
         base_val = base[key] if key in base else base[form[0]]
         loc_val = locale_dict[key]
+        loc_forms = [loc_val]
+        po_plural = None
+        if fmt == "po":
+            base_val, po_plural = _po_reference(base, key)
+            entry = getattr(locale_dict, "entries", {}).get(key)
+            if entry and entry["msgid_plural"] is not None:
+                loc_forms = entry["msgstr"]
 
         if loc_val.strip().startswith(UNTRANSLATED_MARKER):
             # A key --fix inserted and nobody has translated yet. It exists in
@@ -1032,7 +1289,7 @@ def check_locale(base, locale_dict, locale_name, path, fmt,
             untranslated_markers.append(key)
             continue
 
-        if base_val.strip() and not loc_val.strip():
+        if base_val.strip() and not all(f.strip() for f in loc_forms):
             # Report this as "empty," not also as a placeholder mismatch -
             # an empty value trivially has no tokens, so it would always
             # register as a mismatch too, and that's a less useful, more
@@ -1044,6 +1301,10 @@ def check_locale(base, locale_dict, locale_name, path, fmt,
             _, base_tokens = extract_placeholders(base[form[0]])
             _, loc_tokens = extract_placeholders(loc_val)
             mismatch = _plural_form_mismatch(base, key, form[0], form[1], loc_val, loc_tokens)
+        elif po_plural is not None:
+            found = _po_form_mismatch(po_plural, loc_forms, strict_forms)
+            mismatch = found is not None
+            base_tokens, loc_tokens = found or ((), ())
         else:
             _, base_tokens = extract_placeholders(base_val)
             _, loc_tokens = extract_placeholders(loc_val)
@@ -1679,6 +1940,9 @@ def fix_missing_keys_properties(text, missing_keys, base):
     return body + sep + "\n".join(lines) + "\n"
 
 
+# Real languages need at most six forms; this stops a junk header from asking for millions.
+_PO_MAX_NPLURALS = 100
+
 _PO_SKIP_REASONS = {
     "fuzzy": "already in the file as a fuzzy entry, translate it and drop the fuzzy flag",
     "obsolete": "already in the file as an obsolete #~ entry, restore it or delete it",
@@ -1692,18 +1956,34 @@ def _fix_po(text, missing_keys, base):
     in the file, and a second msgid makes msgfmt stop with "duplicate
     message definition". That covers a second --fix run too: the first
     run's own entry is fuzzy."""
-    inactive = {key: state for key, _msgstr, state in _po_entries(text) if state != "live"}
+    records = list(_po_records(text))
+    inactive = {r["key"]: r["state"] for r in records
+                if r["key"] is not None and r["state"] != "live"}
     skipped = {key: _PO_SKIP_REASONS[inactive[key]] for key in missing_keys if key in inactive}
+    header = next((r["msgstr"][0] for r in records
+                   if r["key"] is None and r["state"] != "obsolete"), "")
+    nplurals = po_plural_forms(header)[0]
+    if not nplurals or nplurals > _PO_MAX_NPLURALS:
+        nplurals = 2
     blocks = []
     for key in missing_keys:
         if key in skipped:
             continue
+        entry = getattr(base, "entries", {}).get(key)
         msgctxt, msgid = key if isinstance(key, tuple) else (None, key)
-        lines = ["#, fuzzy"]
+        flags = [f for f in (entry["flags"] if entry else []) if f.endswith("-format")]
+        lines = ["#, " + ", ".join(["fuzzy"] + flags)]
         if msgctxt is not None:
             lines.append(f"msgctxt {json.dumps(msgctxt, ensure_ascii=False)}")
         lines.append(f"msgid {json.dumps(msgid, ensure_ascii=False)}")
-        lines.append(f"msgstr {json.dumps(_base_value(base, key), ensure_ascii=False)}")
+        if entry is None or entry["msgid_plural"] is None:
+            lines.append(f"msgstr {json.dumps(_base_value(base, key), ensure_ascii=False)}")
+        else:
+            lines.append(f"msgid_plural {json.dumps(entry['msgid_plural'], ensure_ascii=False)}")
+            one, other = (_po_reference(base, key) if base[key] else ("", ""))
+            for index in range(nplurals):
+                value = json.dumps(other if index else one, ensure_ascii=False)
+                lines.append(f"msgstr[{index}] {value}")
         blocks.append("\n".join(lines))
     if not blocks:
         return text, skipped
@@ -1718,8 +1998,11 @@ def fix_missing_keys_po(text, missing_keys, base):
     [UNTRANSLATED] text marker - the fuzzy flag IS the marker here, since
     parse_po already skips fuzzy entries outright (see its docstring), so
     the fixed key still reads back as missing on the next run rather than
-    as a finished translation. A key already present as a fuzzy or obsolete
-    entry is left out (see _fix_po)."""
+    as a finished translation. A plural entry gets its msgid_plural and one
+    msgstr[n] per form the file's Plural-Forms header asks for, two without
+    one, and the base entry's format flag (c-format) comes along. A key
+    already present as a fuzzy or obsolete entry is left out (see
+    _fix_po)."""
     return _fix_po(text, missing_keys, base)[0]
 
 
