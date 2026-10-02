@@ -500,7 +500,7 @@ on the runner first so `.yml`/`.yaml` files can be read.
 
 ## Roadmap
 
-What is left needs someone other than this repo's code: a release and native speakers.
+What is left needs someone other than this repo's code: native speakers.
 
 - A native reader for each of the 32 languages on the site. It still says translint reads
   three file formats and no YAML. It reads five. New wording should not ship in a language
