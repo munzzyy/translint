@@ -865,6 +865,13 @@ def _plural_groups(base):
     (_ordinal_one) use a different table and are left alone."""
     groups = {}
     str_keys = [k for k in base if isinstance(k, str)]
+    below = {}
+    if any(k.endswith(".other") for k in str_keys):
+        for k in str_keys:
+            i = k.find(".")
+            while i != -1:
+                below.setdefault(k[:i], []).append(k[i + 1:])
+                i = k.find(".", i + 1)
     for key in str_keys:
         for sep in ("_", "."):
             suffix = sep + "other"
@@ -876,8 +883,7 @@ def _plural_groups(base):
                     continue
                 siblings = [c for c in _PLURAL_CATEGORIES[:-1] if f"{stem}_{c}" in base]
             else:
-                rest = [k[len(stem) + 1:] for k in str_keys
-                        if k.startswith(stem + ".") and k != key]
+                rest = [r for r in below.get(stem, ()) if r != "other"]
                 if any(r not in _PLURAL_CATEGORIES for r in rest):
                     continue
                 siblings = rest
