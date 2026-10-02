@@ -63,6 +63,16 @@ Fixed in 0.5.0:
 - `--fix` works out every write before it makes any. A run that stopped with
   exit 2 on a later namespace (a file that won't decode, a YAML file) could
   already have rewritten the files that came before it.
+- A YAML file whose aliases repeat it past a million keys exits 2 in under a
+  second. 300 bytes of nested aliases used to run for minutes. Anchors and
+  `<<: *defaults` merge keys load as before.
+- `.translintrc.json` is checked. `"allow_identical": "brand"` exits 2
+  instead of quietly becoming `["b", "r", "a", "n", "d"]`, and an unknown
+  key like `allow-identical` gets a warning. The file is also found next to
+  files named one by one or with a glob, so `translint 'locales/*.json'`
+  gives the same verdict as `translint locales`.
+- A path that doesn't exist says so, instead of "no file named 'en' found
+  among: locale".
 - `%(name)s` with flags, a width or a precision (`%(price).2f`) extracts a
   token. It extracted nothing, so a translation that dropped one passed.
 - printf length modifiers (`%lu`, `%ld`, `%zd`, `%zu`) and the `%u`/`%c`

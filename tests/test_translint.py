@@ -2305,3 +2305,96 @@ def test_yaml_fixtures_are_clean_under_strict():
     # The CI job that runs the GitHub Action points it at this directory.
     code, out = run_cli([os.path.join(FIXTURES, "yaml"), "--base", "en", "--strict"])
     assert code == 0, out
+
+
+# ---------------------------------------------------------------------------
+# Input hardening: YAML alias expansion, config validation and discovery,
+# and a path that doesn't exist
+# ---------------------------------------------------------------------------
+
+
+def _alias_bomb(levels):
+    lines = ["a: &a [" + ",".join(['"lol"'] * 10) + "]"]
+    prev = "a"
+    for name in "bcdefghij"[:levels - 1]:
+        lines.append(f"{name}: &{name} [" + ",".join([f"*{prev}"] * 10) + "]")
+        prev = name
+    return "\n".join(lines) + "\n"
+
+
+@requires_yaml
+def test_yaml_alias_bomb_is_refused_quickly():
+    import time
+    text = _alias_bomb(7)
+    assert len(text.encode()) < 300
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {"en.yml": "a: x\n", "de.yml": text})
+        start = time.monotonic()
+        code, out, err = run_cli_err([d, "--base", "en"])
+        assert time.monotonic() - start < 5
+        assert code == 2
+        assert "1,000,000 keys" in err and "aliases" in err
+
+
+@requires_yaml
+def test_yaml_aliases_under_the_cap_still_load():
+    assert len(translint.parse_yaml(_alias_bomb(3), "x.yml")) == 1110
+
+
+def test_flatten_json_limit():
+    assert translint.flatten_json({"a": ["x", "y"]}, limit=2) == {"a.0": "x", "a.1": "y"}
+    with pytest.raises(ValueError):
+        translint.flatten_json({"a": ["x", "y", "z"]}, limit=2)
+
+
+def test_flatten_json_keeps_document_order():
+    data = {"b": {"y": "1", "x": "2"}, "a": ["3", {"z": "4"}]}
+    assert list(translint.flatten_json(data)) == ["b.y", "b.x", "a.0", "a.1.z"]
+
+
+@pytest.mark.parametrize("cfg,message", [
+    ({"allow_identical": "brand"}, "allow_identical must be a list of strings"),
+    ({"do_not_translate": [1, 2]}, "do_not_translate must be a list of strings"),
+])
+def test_cli_config_with_the_wrong_type_errors_cleanly(cfg, message):
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {".translintrc.json": json.dumps(cfg),
+                       "en.json": '{"brand": "Acme Widgets"}',
+                       "de.json": '{"brand": "Acme Widgets"}'})
+        code, out, err = run_cli_err([d, "--base", "en"])
+        assert code == 2
+        assert message in err
+
+
+def test_cli_config_unknown_key_warns_but_keeps_the_exit_code():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {".translintrc.json": '{"allow-identical": ["brand"]}',
+                       "en.json": '{"brand": "Acme Widgets"}',
+                       "de.json": '{"brand": "Acme Widgets"}'})
+        code, out, err = run_cli_err([d, "--base", "en"])
+        assert code == 0
+        assert "allow-identical" in err
+        code, out, err = run_cli_err([d, "--base", "en", "--strict"])
+        assert code == 1
+
+
+@pytest.mark.parametrize("args", [
+    ["locales"],
+    ["locales/*.json"],
+    ["locales/en.json", "locales/de.json"],
+])
+def test_cli_config_is_found_next_to_files_however_they_are_named(args):
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {"locales/.translintrc.json": '{"allow_identical": ["brand"]}',
+                       "locales/en.json": '{"brand": "Acme Widgets"}',
+                       "locales/de.json": '{"brand": "Acme Widgets"}'})
+        code, out = run_cli([os.path.join(d, *a.split("/")) for a in args]
+                            + ["--base", "en", "--strict"])
+        assert code == 0, out
+
+
+def test_cli_path_that_does_not_exist_says_so():
+    code, out, err = run_cli_err([os.path.join(FIXTURES, "nope"), "--base", "en"])
+    assert code == 2
+    assert "no such file or directory" in err
+    assert "no file named" not in err

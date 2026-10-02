@@ -57,6 +57,8 @@ JSON_SCHEMA_KEYS = {
 
 SUPPORTED_FORMATS = ("json", "po", "properties", "yaml")
 
+CONFIG_KEYS = ("allow_identical", "do_not_translate")
+
 EXT_TO_FORMAT = {
     ".json": "json",
     ".po": "po",
@@ -368,23 +370,30 @@ def _placeholder_mismatch(base_val, base_tokens, loc_val, loc_tokens):
 # ---------------------------------------------------------------------------
 
 
-def flatten_json(obj, prefix=""):
+def flatten_json(obj, prefix="", limit=None):
     """Flatten a nested JSON object into dot-namespaced keys. A flat file
     that's already dot-namespaced round-trips unchanged. Lists are treated
     as leaf values (joined by index: key.0, key.1, ...) rather than
     unsupported, since locale files occasionally use arrays for things like
-    ordinal-plural forms and dropping them silently would hide real content."""
+    ordinal-plural forms and dropping them silently would hide real content.
+
+    limit caps the number of keys: past it, ValueError. YAML aliases let a
+    few hundred bytes reference the same list over and over, and walking
+    every reference would run for minutes."""
     out = {}
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            key = f"{prefix}.{k}" if prefix else str(k)
-            out.update(flatten_json(v, key))
-    elif isinstance(obj, list):
-        for i, v in enumerate(obj):
-            key = f"{prefix}.{i}" if prefix else str(i)
-            out.update(flatten_json(v, key))
-    else:
-        out[prefix] = "" if obj is None else str(obj)
+    stack = [(prefix, obj)]
+    while stack:
+        key, node = stack.pop()
+        if isinstance(node, dict):
+            children = [(f"{key}.{k}" if key else str(k), v) for k, v in node.items()]
+        elif isinstance(node, list):
+            children = [(f"{key}.{i}" if key else str(i), v) for i, v in enumerate(node)]
+        else:
+            out[key] = "" if node is None else str(node)
+            if limit is not None and len(out) > limit:
+                raise ValueError(f"more than {limit:,} keys")
+            continue
+        stack.extend(reversed(children))
     return out
 
 
@@ -396,6 +405,11 @@ def parse_json(text, path):
     if not isinstance(data, dict):
         raise ValueError(f"{path}: top level must be a JSON object")
     return flatten_json(data)
+
+
+# No real locale file comes near this; an alias bomb passes it in a few
+# hundred bytes.
+YAML_MAX_KEYS = 1_000_000
 
 
 def parse_yaml(text, path):
@@ -427,7 +441,11 @@ def parse_yaml(text, path):
         root, inner = next(iter(data.items()))
         if _yaml_root_is_locale(root, path) and isinstance(inner, (dict, type(None))):
             data = inner or {}
-    return flatten_json(data)
+    try:
+        return flatten_json(data, limit=YAML_MAX_KEYS)
+    except ValueError as exc:
+        raise ValueError(f"{path}: expands to {exc}, refusing to read it "
+                         f"(YAML aliases repeating the same content?)")
 
 
 # PyYAML reads YAML 1.1 booleans, so Norwegian's "no:" root arrives as False.
@@ -1835,7 +1853,8 @@ def main(argv=None):
                          "e.g. a brand name (repeatable)")
     ap.add_argument("--config", metavar="PATH",
                     help="path to a .translintrc.json with allow_identical/do_not_translate "
-                         "lists (default: .translintrc.json in the scanned directory, if present)")
+                         "lists (default: .translintrc.json in the scanned directory, or in "
+                         "the directory the listed files share, if present)")
     ap.add_argument("--quiet", action="store_true", help="summary line only")
     ap.add_argument("--fix", action="store_true",
                     help="insert MISSING keys only, each tagged with an unmissable "
@@ -1852,29 +1871,6 @@ def main(argv=None):
         print("translint: --dry-run only makes sense with --fix", file=sys.stderr)
         return 2
 
-    allow_identical = list(args.allow_identical)
-    do_not_translate = list(args.do_not_translate)
-
-    config_path = args.config
-    if config_path is None:
-        for p in args.paths:
-            candidate = os.path.join(p, ".translintrc.json") if os.path.isdir(p) else None
-            if candidate and os.path.isfile(candidate):
-                config_path = candidate
-                break
-    if config_path:
-        try:
-            with open(config_path, "r", encoding="utf-8-sig") as fh:
-                cfg = json.load(fh)
-        except (OSError, json.JSONDecodeError) as exc:
-            print(f"translint: {config_path}: {exc}", file=sys.stderr)
-            return 2
-        if not isinstance(cfg, dict):
-            print(f"translint: {config_path}: top level must be a JSON object", file=sys.stderr)
-            return 2
-        allow_identical += list(cfg.get("allow_identical", []))
-        do_not_translate += list(cfg.get("do_not_translate", []))
-
     # Expand glob arguments ourselves - PowerShell and cmd.exe don't expand
     # wildcards before argv reaches us, unlike POSIX shells.
     expanded = []
@@ -1888,6 +1884,9 @@ def main(argv=None):
                 print(f"translint: {p}: no files match", file=sys.stderr)
                 return 2
             expanded.extend(matches)
+        elif not os.path.exists(p):
+            print(f"translint: {p}: no such file or directory", file=sys.stderr)
+            return 2
         else:
             expanded.append(p)
 
@@ -1896,6 +1895,47 @@ def main(argv=None):
     if not entries:
         print(f"translint: no locale files found in {' '.join(args.paths)}", file=sys.stderr)
         return 2
+
+    allow_identical = list(args.allow_identical)
+    do_not_translate = list(args.do_not_translate)
+
+    # A .translintrc.json next to the locale files applies however they were
+    # named: as the directory, as a glob, or one by one.
+    config_path = args.config
+    if config_path is None:
+        candidates = [p for p in expanded if os.path.isdir(p)]
+        try:
+            candidates.append(os.path.commonpath(
+                [os.path.dirname(path) or "." for path, _root in entries]))
+        except ValueError:
+            pass
+        for d in candidates:
+            if os.path.isfile(os.path.join(d, ".translintrc.json")):
+                config_path = os.path.join(d, ".translintrc.json")
+                break
+    if config_path:
+        try:
+            with open(config_path, "r", encoding="utf-8-sig") as fh:
+                cfg = json.load(fh)
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"translint: {config_path}: {exc}", file=sys.stderr)
+            return 2
+        if not isinstance(cfg, dict):
+            print(f"translint: {config_path}: top level must be a JSON object", file=sys.stderr)
+            return 2
+        for name in CONFIG_KEYS:
+            value = cfg.get(name, [])
+            if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+                print(f"translint: {config_path}: {name} must be a list of strings",
+                      file=sys.stderr)
+                return 2
+        unknown = sorted(set(cfg) - set(CONFIG_KEYS))
+        if unknown:
+            _warn(f"translint: {config_path}: ignoring unknown key(s): {', '.join(unknown)} "
+                  f"(known: {', '.join(CONFIG_KEYS)})")
+        allow_identical += cfg.get("allow_identical", [])
+        do_not_translate += cfg.get("do_not_translate", [])
+
 
     # One namespace per set of files that belong together. With the default
     # --locale-from stem there's exactly one, holding everything discovered;

@@ -270,8 +270,13 @@ files for anything that should persist:
 
 Both are also available as repeatable flags (`--allow-identical KEY`,
 `--do-not-translate TOKEN`) if you'd rather not commit a config file. translint looks for
-`.translintrc.json` in the directory you point it at; pass `--config PATH` to use a
-specific file instead.
+`.translintrc.json` in the directory you point it at, or, when you name the files one by
+one or with a glob, in the directory they share. Pass `--config PATH` to use a specific
+file instead.
+
+Both values have to be lists of strings, and anything else stops the run with exit 2. A
+key translint doesn't know gets a warning on stderr, since a typo like `allow-identical`
+would otherwise turn your allowlist off without a word.
 
 ## `--json` output
 

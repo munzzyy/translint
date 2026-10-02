@@ -6,7 +6,9 @@ doesn't make network calls and doesn't read credentials. Parsing never uses
 `eval`/`exec`. JSON goes through `json.loads`, YAML through PyYAML's
 `yaml.safe_load` (never `yaml.load`, which can build arbitrary Python
 objects), and the .po/.properties parsers are plain text/regex processing,
-so a malicious locale file can't run code through translint.
+so a malicious locale file can't run code through translint. YAML aliases
+can make a few hundred bytes expand to millions of keys, so a YAML file
+that expands past a million is refused rather than left to stall a CI run.
 
 By default it doesn't write anything besides its own stdout. The one
 opt-in exception is `--fix`, which rewrites the locale files you pass it,
