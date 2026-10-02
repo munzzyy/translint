@@ -80,8 +80,10 @@ Fixed in 0.5.0:
   duplicate definition. Those keys are named on stderr instead.
 - `--fix` on a `.properties` file whose last line ends in a continuation
   backslash puts a blank line first, so the new key no longer becomes part
-  of that value. A dangling backslash at the very end of a file is dropped
-  when reading, the way `java.util.Properties` does it.
+  of that value. That covers a file where a blank line already closed the
+  value too, since `--fix` drops trailing blank lines before it appends. A
+  dangling backslash at the very end of a file is dropped when reading, the
+  way `java.util.Properties` does it.
 - A YAML file whose aliases repeat it past a million keys exits 2 in under a
   second. 300 bytes of nested aliases used to run for minutes. Nested lists
   count toward the million as well as keys, so aliases repeating empty lists

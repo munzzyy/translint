@@ -2589,12 +2589,15 @@ def test_parse_properties_drops_a_continuation_backslash_at_eof():
     assert translint.parse_properties("a=Apfel \\\n", "x") == {"a": "Apfel "}
 
 
-def test_cli_fix_properties_after_an_open_continuation_keeps_both_values():
+@pytest.mark.parametrize("text", [b"a=Apfel \\", b"a=Apfel \\\n\n", b"a=Apfel \\\n\n\n"])
+def test_cli_fix_properties_after_a_trailing_continuation_keeps_both_values(text):
     with tempfile.TemporaryDirectory() as d:
         de = os.path.join(d, "de.properties")
-        write_tree(d, {"en.properties": "a=Apple\nb=Banana\n",
-                       "de.properties": "a=Apfel \\"})
+        write_tree(d, {"en.properties": "a=Apple\nb=Banana\n"})
+        with open(de, "wb") as fh:
+            fh.write(text)
         before = translint.parse_properties(open(de, encoding="utf-8").read(), de)
+        assert before == {"a": "Apfel "}
         run_cli_err([d, "--base", "en", "--fix"])
         after = translint.parse_properties(open(de, encoding="utf-8").read(), de)
         assert after["a"] == before["a"]

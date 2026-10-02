@@ -1661,16 +1661,18 @@ def fix_missing_keys_properties(text, missing_keys, base):
     file. .properties has no nesting and no required key order, so unlike
     JSON there's no single "right" place to insert one - appending is both
     the simplest option and the one guaranteed not to touch an existing
-    line. A file whose last line ends in a continuation backslash gets a
-    blank line first, which ends that value where it already ended at EOF
-    instead of letting it swallow the new key."""
+    line. A file whose last line, once trailing newlines are dropped, ends
+    in a continuation backslash gets a blank line first, which ends that
+    value where it already ended instead of letting it swallow the new
+    key."""
     lines = [
         f"{_properties_escape_key(key)}="
         f"{_properties_escape_value(_untranslated_value(_base_value(base, key)))}"
         for key in missing_keys
     ]
-    sep = "\n\n" if _properties_ends_in_continuation(text) else "\n"
-    return text.rstrip("\n") + sep + "\n".join(lines) + "\n"
+    body = text.rstrip("\n")
+    sep = "\n\n" if _properties_ends_in_continuation(body) else "\n"
+    return body + sep + "\n".join(lines) + "\n"
 
 
 _PO_SKIP_REASONS = {
