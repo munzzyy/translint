@@ -463,7 +463,7 @@ For YAML locale files, give the hook PyYAML:
 ## As a GitHub Action
 
 ```yaml
-- uses: munzzyy/translint@main
+- uses: munzzyy/translint@v0.5.0
   with:
     paths: locales/
     base: en
@@ -503,10 +503,6 @@ on the runner first so `.yml`/`.yaml` files can be read.
 
 What is left needs someone other than this repo's code: a release and native speakers.
 
-- A v0.5.0 release. Until there is one, `pip install translint`, `pre-commit autoupdate`
-  and any tag pin still hand out v0.4.0 from July. That is why [Install](#install) and
-  the hook and Action examples point at the repo and `main`. They go back to the package
-  and the tag once v0.5.0 exists.
 - A native reader for each of the 32 languages on the site. It still says translint reads
   three file formats and no YAML. It reads five. New wording should not ship in a language
   until someone who speaks it has read it, the same kind of review that caught real

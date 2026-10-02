@@ -2,7 +2,7 @@
 
 The same notes ship as [GitHub releases](https://github.com/munzzyy/translint/releases).
 
-## v0.5.0 (unreleased)
+## v0.5.0 - 2026-10-02
 
 **Licensing:** the 0.3.0 and 0.4.0 artifacts on PyPI, and the v0.4.0 tag, are
 under the Prosperity Public License 3.0.0 - free for noncommercial use only.
