@@ -83,8 +83,9 @@ Fixed in 0.5.0:
   of that value. A dangling backslash at the very end of a file is dropped
   when reading, the way `java.util.Properties` does it.
 - A YAML file whose aliases repeat it past a million keys exits 2 in under a
-  second. 300 bytes of nested aliases used to run for minutes. Anchors and
-  `<<: *defaults` merge keys load as before.
+  second. 300 bytes of nested aliases used to run for minutes. Nested lists
+  count toward the million as well as keys, so aliases repeating empty lists
+  are refused too. Anchors and `<<: *defaults` merge keys load as before.
 - `.translintrc.json` is checked. `"allow_identical": "brand"` exits 2
   instead of quietly becoming `["b", "r", "a", "n", "d"]`, and an unknown
   key like `allow-identical` gets a warning. The file is also found next to

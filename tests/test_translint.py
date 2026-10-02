@@ -2310,8 +2310,8 @@ def test_yaml_fixtures_are_clean_under_strict():
 # ---------------------------------------------------------------------------
 
 
-def _alias_bomb(levels):
-    lines = ["a: &a [" + ",".join(['"lol"'] * 10) + "]"]
+def _alias_bomb(levels, leaf='"lol"'):
+    lines = ["a: &a [" + ",".join([leaf] * 10) + "]"]
     prev = "a"
     for name in "bcdefghij"[:levels - 1]:
         lines.append(f"{name}: &{name} [" + ",".join([f"*{prev}"] * 10) + "]")
@@ -2334,14 +2334,33 @@ def test_yaml_alias_bomb_is_refused_quickly():
 
 
 @requires_yaml
+@pytest.mark.parametrize("levels,size", [(7, 266), (8, 304)])
+def test_yaml_alias_bomb_of_empty_lists_is_refused_quickly(levels, size):
+    import time
+    text = _alias_bomb(levels, leaf="[]")
+    assert len(text.encode()) == size
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {"en.yml": "a: x\n", "de.yml": text})
+        start = time.monotonic()
+        code, out, err = run_cli_err([d, "--base", "en"])
+        assert time.monotonic() - start < 5
+        assert code == 2
+        assert "1,000,000 keys" in err and "aliases" in err
+
+
+@requires_yaml
 def test_yaml_aliases_under_the_cap_still_load():
     assert len(translint.parse_yaml(_alias_bomb(3), "x.yml")) == 1110
 
 
-def test_flatten_json_limit():
-    assert translint.flatten_json({"a": ["x", "y"]}, limit=2) == {"a.0": "x", "a.1": "y"}
+def test_flatten_json_limit_counts_lists_and_objects_too():
+    assert translint.flatten_json({"a": ["x", "y"]}, limit=3) == {"a.0": "x", "a.1": "y"}
     with pytest.raises(ValueError):
-        translint.flatten_json({"a": ["x", "y", "z"]}, limit=2)
+        translint.flatten_json({"a": ["x", "y"]}, limit=2)
+    empty = {"a": [[], [], {}]}
+    assert translint.flatten_json(empty, limit=4) == {}
+    with pytest.raises(ValueError):
+        translint.flatten_json(empty, limit=3)
 
 
 def test_flatten_json_keeps_document_order():

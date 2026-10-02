@@ -378,23 +378,27 @@ def flatten_json(obj, prefix="", limit=None):
     unsupported, since locale files occasionally use arrays for things like
     ordinal-plural forms and dropping them silently would hide real content.
 
-    limit caps the number of keys: past it, ValueError. YAML aliases let a
-    few hundred bytes reference the same list over and over, and walking
-    every reference would run for minutes."""
+    limit caps the number of keys walked, nested objects and lists
+    included: past it, ValueError. YAML aliases let a few hundred bytes
+    reference the same list over and over, and walking every reference
+    would run for minutes even when the lists are empty."""
     out = {}
+    walked = 0
     stack = [(prefix, obj)]
     while stack:
         key, node = stack.pop()
         if isinstance(node, dict):
-            children = [(f"{key}.{k}" if key else str(k), v) for k, v in node.items()]
+            items = node.items()
         elif isinstance(node, list):
-            children = [(f"{key}.{i}" if key else str(i), v) for i, v in enumerate(node)]
+            items = enumerate(node)
         else:
             out[key] = "" if node is None else str(node)
-            if limit is not None and len(out) > limit:
-                raise ValueError(f"more than {limit:,} keys")
             continue
-        stack.extend(reversed(children))
+        walked += len(node)
+        if limit is not None and walked > limit:
+            raise ValueError(f"more than {limit:,} keys")
+        if node:
+            stack.extend(reversed([(f"{key}.{k}" if key else str(k), v) for k, v in items]))
     return out
 
 
