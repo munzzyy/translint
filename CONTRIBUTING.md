@@ -66,8 +66,9 @@ python translint.py tests/fixtures/json --base en --json
     styles and how their matches get reconciled when two styles overlap
     syntactically (see the comment above them for the two known overlaps
     and why the match order matters).
-  - `parse_json` / `parse_po` / `parse_properties` / `parse_yaml` - one
-    parser per format, each returning a flat `{dotted.key: value}` dict.
+  - `parse_json` / `parse_po` / `parse_properties` / `parse_yaml` /
+    `parse_arb` - one parser per format, each returning a flat
+    `{dotted.key: value}` dict.
   - `check_locale()` - the comparison itself. Pure function, no I/O, so
     it's the same entry point the CLI and any importer call.
 - Add fixtures under `tests/fixtures/` for anything format- or

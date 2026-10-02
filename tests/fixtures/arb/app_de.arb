@@ -1,0 +1,6 @@
+{
+  "@@locale": "de",
+  "hello": "Hallo",
+  "itemCount": "{count, plural, =0{Keine Einträge} =1{Ein Eintrag} other{{count} Einträge}}",
+  "settings": "Einstellungen"
+}

@@ -154,7 +154,7 @@ directory.
 
 ## Formats
 
-Auto-detected by extension, or forced with `--format {json,po,properties,yaml}`. Forcing a
+Auto-detected by extension, or forced with `--format {json,po,properties,yaml,arb}`. Forcing a
 format also turns off the extension filter on a directory scan, so a directory of
 `en.lang` / `de.lang` files gets read as the format you named instead of coming back
 empty:
@@ -181,6 +181,11 @@ empty:
   actually opens a `.yml`/`.yaml` file, so leaving the extra out doesn't cost anything
   until you point translint at one. `--fix` doesn't write YAML back yet - missing keys
   in a `.yml` file are reported like any other finding, just not auto-inserted.
+- **Flutter .arb** - JSON whose values are ICU messages. Keys starting with `@`
+  (`@@locale`, and the `@hello` block describing `hello`) are metadata and stay out of
+  the comparison. The locale is the file's `@@locale`, or else the end of the name, so
+  `app_en.arb` / `app_de.arb` / `app_pt_BR.arb` work with `--base en`. `--fix` adds a
+  missing message as a plain key and leaves the metadata alone.
 
 ### Encoding
 
@@ -287,7 +292,7 @@ they don't change without a version bump:
 | --- | --- |
 | `locale` | the locale name (`de`) |
 | `path` | the file this result is about |
-| `format` | `json`, `po`, `properties`, or `yaml` |
+| `format` | `json`, `po`, `properties`, `yaml`, or `arb` |
 | `missing_keys` | keys in the base that this file hasn't got |
 | `extra_keys` | keys here that the base hasn't got |
 | `placeholder_mismatches` | objects of `{key, base, locale}`, the token lists that differ |

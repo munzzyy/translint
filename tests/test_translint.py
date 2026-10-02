@@ -2398,3 +2398,70 @@ def test_cli_path_that_does_not_exist_says_so():
     assert code == 2
     assert "no such file or directory" in err
     assert "no file named" not in err
+
+
+# ---------------------------------------------------------------------------
+# Flutter .arb: JSON with ICU messages and @-prefixed metadata
+# ---------------------------------------------------------------------------
+
+
+def test_arb_fixture_reports_the_dropped_placeholder_and_nothing_about_metadata():
+    code, out = run_cli([os.path.join(FIXTURES, "arb"), "--base", "en", "--json"])
+    assert code == 1
+    results = json.loads(out)
+    assert len(results) == 1
+    r = results[0]
+    assert r["locale"] == "de" and r["format"] == "arb"
+    assert r["placeholder_mismatches"] == [{"key": "hello", "base": ["{name}"], "locale": []}]
+    assert r["missing_keys"] == [] and r["extra_keys"] == []
+    assert r["untranslated_values"] == []
+
+
+def test_parse_arb_drops_every_at_key():
+    text = json.dumps({"@@locale": "en", "@@last_modified": "x", "a": "A",
+                       "@a": {"description": "d", "placeholders": {}}})
+    assert translint.parse_arb(text, "app_en.arb") == {"a": "A"}
+
+
+def test_arb_locale_from_the_stem_when_there_is_no_at_locale():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {"app_en.arb": '{"a": "Hello", "b": "World"}',
+                       "app_de.arb": '{"a": "Hallo"}'})
+        code, out = run_cli([d, "--base", "en", "--json"])
+        r = json.loads(out)[0]
+        assert r["locale"] == "de" and r["missing_keys"] == ["b"]
+
+
+def test_arb_at_locale_wins_over_the_stem():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {"strings_en.arb": '{"@@locale": "en", "a": "Hello"}',
+                       "strings_xx.arb": '{"@@locale": "fr", "a": "Bonjour"}'})
+        code, out = run_cli([d, "--base", "en", "--json"])
+        assert [r["locale"] for r in json.loads(out)] == ["fr"]
+
+
+@pytest.mark.parametrize("stem,prefix,locale", [
+    ("app_en", "app", "en"),
+    ("app_pt_BR", "app", "pt_BR"),
+    ("my_app_zh_Hant_TW", "my_app", "zh_Hant_TW"),
+    ("intl_messages_es_419", "intl_messages", "es_419"),
+])
+def test_arb_stem_split(stem, prefix, locale):
+    m = translint._RX_ARB_STEM.match(stem)
+    assert (m.group(1), m.group(2)) == (prefix, locale)
+
+
+def test_cli_fix_inserts_into_arb_without_touching_metadata():
+    with tempfile.TemporaryDirectory() as d:
+        en = {"@@locale": "en", "hello": "Hello {name}",
+              "@hello": {"placeholders": {"name": {"type": "String"}}},
+              "bye": "Goodbye", "@bye": {"description": "Farewell"}}
+        de = {"@@locale": "de", "hello": "Hallo {name}",
+              "@hello": {"placeholders": {"name": {"type": "String"}}}}
+        write_tree(d, {"app_en.arb": json.dumps(en, indent=2),
+                       "app_de.arb": json.dumps(de, indent=2)})
+        code, out, err = run_cli_err([d, "--base", "en", "--fix"])
+        after = json.load(open(os.path.join(d, "app_de.arb"), encoding="utf-8"))
+        assert after["bye"] == "[UNTRANSLATED] Goodbye"
+        assert "@bye" not in after
+        assert after["@hello"] == de["@hello"] and after["@@locale"] == "de"

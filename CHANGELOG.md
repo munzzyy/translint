@@ -95,6 +95,10 @@ Fixed in 0.5.0:
 
 Added in 0.5.0:
 
+- Flutter `.arb` files. `@`-prefixed metadata stays out of the comparison,
+  the locale comes from `@@locale` or the end of the name (`app_de.arb`),
+  and `--fix` adds a missing message without touching the metadata. Forcing
+  `--format json` on them used to report the metadata as missing keys.
 - `--fix`, scoped narrowly on purpose. It inserts a key that's entirely
   missing from a locale file, tagged with an unmissable `[UNTRANSLATED]`
   marker (`.po` gets its own `fuzzy` flag instead, which `parse_po` already

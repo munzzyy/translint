@@ -29,8 +29,8 @@ python translint.py locales/ --base en --json
 Point `paths` at the directory holding the locale files (or list specific files), and
 `--base` at the locale name (the filename stem, e.g. `en` for `en.json`) that's the
 reference every other locale gets checked against. Format is auto-detected from the
-extension (`.json`, `.po`/`.pot`, `.properties`, `.yml`/`.yaml`); pass `--format` to force
-one. YAML needs PyYAML (`pip install translint[yaml]`); without it a `.yml` file exits 2
+extension (`.json`, `.po`/`.pot`, `.properties`, `.yml`/`.yaml`, Flutter's `.arb`); pass
+`--format` to force one. YAML needs PyYAML (`pip install translint[yaml]`); without it a `.yml` file exits 2
 with a message saying so.
 
 No `--json`? You get the same information as a grouped human-readable report instead,

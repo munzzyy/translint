@@ -9,10 +9,10 @@ KeyError/IndexError the first time that string actually renders), empty
 values, and values that still look untranslated.
 
 Supports JSON (nested or flat dot-namespaced keys), gettext .po, Java
-.properties, and YAML files, auto-detected by extension. Standard library
-only for JSON/.po/.properties - YAML needs the optional `translint[yaml]`
-extra (PyYAML), imported lazily so the default install stays dependency
-free. No network, no eval/exec on file contents.
+.properties, YAML and Flutter .arb files, auto-detected by extension.
+Standard library only for everything but YAML, which needs the optional
+`translint[yaml]` extra (PyYAML), imported lazily so the default install
+stays dependency free. No network, no eval/exec on file contents.
 
 Usage:
   translint locales/                         # scan a directory, base=en
@@ -55,7 +55,7 @@ JSON_SCHEMA_KEYS = {
     "untranslated_markers", "ok",
 }
 
-SUPPORTED_FORMATS = ("json", "po", "properties", "yaml")
+SUPPORTED_FORMATS = ("json", "po", "properties", "yaml", "arb")
 
 CONFIG_KEYS = ("allow_identical", "do_not_translate")
 
@@ -66,6 +66,7 @@ EXT_TO_FORMAT = {
     ".properties": "properties",
     ".yml": "yaml",
     ".yaml": "yaml",
+    ".arb": "arb",
 }
 
 # ---------------------------------------------------------------------------
@@ -667,8 +668,22 @@ def parse_po(text, path):
     return out
 
 
+def parse_arb(text, path):
+    """Flutter's Application Resource Bundle: a flat JSON object of ICU
+    messages. Keys starting with "@" are metadata (@@locale, and @key with
+    the description and placeholder types for key), not messages, so they
+    never take part in the comparison."""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path}: invalid JSON ({exc})")
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: top level must be a JSON object")
+    return flatten_json({k: v for k, v in data.items() if not str(k).startswith("@")})
+
+
 PARSERS = {"json": parse_json, "po": parse_po, "properties": parse_properties,
-           "yaml": parse_yaml}
+           "yaml": parse_yaml, "arb": parse_arb}
 
 
 def detect_format(path):
@@ -1105,6 +1120,22 @@ def locale_name_from_path(path):
     return os.path.splitext(os.path.basename(path))[0]
 
 
+# app_en.arb, app_pt_BR.arb, my_app_zh_Hant_TW.arb: Flutter's gen-l10n naming,
+# a prefix and then the locale with underscores.
+_RX_ARB_STEM = re.compile(r"^(.+?)_([a-z]{2,3}(?:_[A-Z][a-z]{3})?(?:_(?:[A-Z]{2}|\d{3}))?)$")
+
+
+def _arb_locale(path):
+    """The @@locale an .arb file declares, or None."""
+    try:
+        with open(path, "r", encoding="utf-8-sig") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    locale = data.get("@@locale") if isinstance(data, dict) else None
+    return locale if isinstance(locale, str) and locale else None
+
+
 def locale_and_namespace(path, root, locale_from="stem", fmt=None):
     """Split a discovered file into (locale, namespace).
 
@@ -1113,7 +1144,9 @@ def locale_and_namespace(path, root, locale_from="stem", fmt=None):
     namespace so they all get compared against one base. A YAML stem with
     a dot in it is Rails' devise.en.yml convention: the locale is the last
     part and the rest is the namespace, so devise.de.yml is compared
-    against devise.en.yml rather than against en.yml.
+    against devise.en.yml rather than against en.yml. An .arb file takes
+    its locale from its @@locale, or else from the end of the stem
+    (app_de.arb), and the prefix before it is the namespace.
 
     With locale_from="dir" the locale is the first directory below the
     scanned root - the next-i18next / i18next-fs-backend layout,
@@ -1123,7 +1156,12 @@ def locale_and_namespace(path, root, locale_from="stem", fmt=None):
     de/footer.json."""
     if locale_from != "dir":
         stem = locale_name_from_path(path)
-        if "." in stem and (fmt or detect_format(path)) == "yaml":
+        fmt = fmt or detect_format(path)
+        if fmt == "arb":
+            m = _RX_ARB_STEM.match(stem)
+            locale = _arb_locale(path) or (m.group(2) if m else stem)
+            return locale, (m.group(1) if m else "")
+        if "." in stem and fmt == "yaml":
             rel = os.path.splitext(os.path.relpath(path, root))[0]
             namespace, locale = rel.replace(os.sep, "/").rsplit(".", 1)
             return locale, namespace
@@ -1608,6 +1646,7 @@ def fix_missing_keys_po(text, missing_keys, base):
 # left out rather than written.
 FIX_INSERTERS = {
     "json": _fix_json,
+    "arb": _fix_json,
     "po": lambda text, keys, base, **_: (fix_missing_keys_po(text, keys, base), {}),
     "properties": lambda text, keys, base, **_: (
         fix_missing_keys_properties(text, keys, base), {}),

@@ -1,0 +1,21 @@
+{
+  "@@locale": "en",
+  "hello": "Hello {name}",
+  "@hello": {
+    "description": "Greeting on the home screen",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "itemCount": "{count, plural, =0{No items} =1{One item} other{{count} items}}",
+  "@itemCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "settings": "Settings"
+}

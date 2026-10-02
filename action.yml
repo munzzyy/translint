@@ -18,7 +18,7 @@ inputs:
     required: false
     default: "false"
   format:
-    description: Force a format (json/po/properties/yaml) instead of detecting from extension.
+    description: Force a format (json/po/properties/yaml/arb) instead of detecting from extension.
     required: false
     default: ""
   recursive:
