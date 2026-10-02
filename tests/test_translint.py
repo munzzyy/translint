@@ -2045,7 +2045,7 @@ def test_plural_many_for_large_numbers_is_optional(locale):
     assert r["missing_keys"] == [] and r["extra_keys"] == []
 
 
-def test_plural_zero_is_never_required_and_never_extra():
+def test_plural_zero_is_never_extra_and_optional_without_a_cldr_zero_form():
     base = dict(EN_PLURAL, file_zero="No files")
     r = _plural_check("ja", {"file_other": "{{count}} 個のファイル", "title": "ファイル"}, base)
     assert r["missing_keys"] == []
@@ -2670,3 +2670,52 @@ def test_icu_nested_placeholder_dropped_from_every_branch_is_a_mismatch():
     r = translint.check_locale(base, loc, "de", "de.json", "json")
     assert len(r["placeholder_mismatches"]) == 1
     assert "{name}" in r["placeholder_mismatches"][0]["base"]
+
+
+def test_plural_one_form_without_the_count_keeps_other_tokens_required():
+    base = {"file_one": "One file", "file_other": "{{count}} files from {{name}}",
+            "title": "Files"}
+    r = _plural_check("de", {"file_one": "Eine Datei", "file_other": "{{count}} Dateien",
+                             "title": "Dateien"}, base)
+    assert [m["key"] for m in r["placeholder_mismatches"]] == ["file_other"]
+    r = _plural_check("ru", {"file_one": "{{count}} файл от {{name}}",
+                             "file_few": "{{count}} файла",
+                             "file_many": "{{count}} файлов от {{name}}",
+                             "file_other": "{{count}} файла от {{name}}",
+                             "title": "Файлы"}, base)
+    assert [m["key"] for m in r["placeholder_mismatches"]] == ["file_few"]
+
+
+def test_plural_rails_one_form_without_the_count_keeps_other_tokens_required():
+    base = {"files.one": "One file", "files.other": "%{count} files in %{folder}"}
+    r = _plural_check("de", {"files.one": "Eine Datei", "files.other": "%{count} Dateien"}, base)
+    assert [m["key"] for m in r["placeholder_mismatches"]] == ["files.other"]
+
+
+def test_plural_count_under_another_name_needs_exactly_one_dropped_token():
+    base = {"shared.one": "Shared once", "shared.other": "Shared %{times} times by %{who}"}
+    r = _plural_check("de", {"shared.one": "Einmal geteilt",
+                             "shared.other": "%{times} Mal geteilt"}, base)
+    assert [m["key"] for m in r["placeholder_mismatches"]] == ["shared.other"]
+
+
+def test_cli_plural_form_dropping_a_placeholder_fails_strict():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {
+            "en.json": json.dumps({"file_one": "One file",
+                                   "file_other": "{{count}} files from {{name}}",
+                                   "title": "Files"}),
+            "de.json": json.dumps({"file_one": "Eine Datei", "file_other": "{{count}} Dateien",
+                                   "title": "Dateien"}),
+        })
+        code, out = run_cli([d, "--strict"])
+        assert code == 1, out
+        assert "file_other" in out
+
+
+def test_plural_base_with_a_count_never_takes_another_token_as_the_count():
+    base = {"file_one": "{{count}} file", "file_other": "{{count}} files from {{name}}"}
+    r = _plural_check("ru", {"file_one": "{{count}} файл", "file_few": "{{count}} файла",
+                             "file_many": "{{count}} файлов от {{name}}",
+                             "file_other": "{{count}} файла от {{name}}"}, base)
+    assert [m["key"] for m in r["placeholder_mismatches"]] == ["file_few"]

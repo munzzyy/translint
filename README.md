@@ -246,21 +246,22 @@ CLDR's plural rules (the language part of the name, so `pt-BR` counts as Portugu
 expects exactly those forms. A Japanese file without `file_one` is complete, a Russian
 `file_few` isn't an extra key, and a Russian file without one is missing it.
 
-Two kinds of form get some slack. `zero` is never required and never extra, because
-i18next and Rails both use it for a count of 0 in any language. A form that no whole
-number up to 1000 falls into, like French `many` (a million and up) or Czech `many`
-(fractions), is allowed but not required.
+Two kinds of form get some slack. `zero` is never extra, because i18next and Rails both
+use it for a count of 0 in any language. It is only required in the languages whose CLDR
+rules have it, like Arabic and Latvian. A form that no whole number up to 1000 falls
+into, like French `many` (a million and up) or Czech `many` (fractions), is allowed but
+not required.
 
 A form passes the placeholder check when it matches the base's own copy of that form, or
 the base's `other` form with the count made optional where one number is meant. The count
 can be left out of `zero`, `one` and `two` ("One file") and added to any form, but `few`,
 `many` and `other` cover a range of numbers and have to keep it. The count is
-`{{count}}`/`%{count}`, or any token the base's `other` form has and its `one` form drops,
-so a Rails app passing the number as `%{friendly_count}` works too. A lone `_other` key
-only starts a plural set when it has a sibling form or a `{{count}}` in it, so
-`gender_other` next to `gender_male` stays an ordinary key. A locale whose language
-translint doesn't know, and i18next ordinal keys (`_ordinal_one`), get the plain
-key-by-key comparison.
+`{{count}}`/`%{count}`. When the base's `other` form has neither and its `one` form drops
+exactly one token, that token is the count, so a Rails app passing the number as
+`%{friendly_count}` works too. A lone `_other` key only starts a plural set when it has a
+sibling form or a `{{count}}` in it, so `gender_other` next to `gender_male` stays an
+ordinary key. A locale whose language translint doesn't know, and i18next ordinal keys
+(`_ordinal_one`), get the plain key-by-key comparison.
 
 ## Config
 

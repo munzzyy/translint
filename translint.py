@@ -907,9 +907,10 @@ def _plural_form_mismatch(base, key, other_key, category, loc_val, loc_tokens):
     The count may be left out of zero/one/two ("One file", "Eine Datei"),
     and any form may carry it when the base form doesn't ("{{count}} файл"
     for Russian one, which also covers 21 and 31). few/many/other stand for
-    a range of numbers and have to keep it. Besides {{count}}/%{count}, a
-    token the base's "other" form has and its "one" form drops is the
-    count too, under whatever name the app passes it (%{friendly_count})."""
+    a range of numbers and have to keep it. The count is {{count}}/%{count}.
+    When the base's "other" form has neither and its "one" form drops
+    exactly one token, that token is the count under the name the app
+    passes it (%{friendly_count})."""
     if key in base:
         _, same_tokens = extract_placeholders(base[key])
         if not _placeholder_mismatch(base[key], same_tokens, loc_val, loc_tokens):
@@ -918,8 +919,10 @@ def _plural_form_mismatch(base, key, other_key, category, loc_val, loc_tokens):
     _, base_tokens = extract_placeholders(base_other)
     count_like = set(_COUNT_TOKENS)
     one_key = other_key[:-len("other")] + "one"
-    if one_key in base:
-        count_like |= set(base_tokens) - set(extract_placeholders(base[one_key])[1])
+    if one_key in base and not count_like & set(base_tokens):
+        dropped = set(base_tokens) - set(extract_placeholders(base[one_key])[1])
+        if len(dropped) == 1:
+            count_like |= dropped
     base_rest = [t for t in base_tokens if t not in count_like]
     loc_rest = [t for t in loc_tokens if t not in count_like]
     if (category in ("few", "many", "other") and len(base_rest) < len(base_tokens)
