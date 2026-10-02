@@ -1,0 +1,5 @@
+en:
+  greeting: Hello %{name}
+  files:
+    one: One file
+    other: "%{count} files"

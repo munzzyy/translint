@@ -37,6 +37,44 @@ jobs:
       - run: pip install pytest
       - run: python -m pytest tests/ -q
 
+  test-yaml:
+    # The matrix above runs without PyYAML so the missing-extra error path
+    # stays covered. Here it's installed, and a YAML test that skips fails
+    # the job instead of passing quietly.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.x"
+      - run: pip install pytest "PyYAML>=5.1"
+      - shell: bash
+        run: |
+          python -m pytest tests/ -q -rs | tee pytest-yaml.txt
+          if grep -F "translint[yaml]" pytest-yaml.txt; then
+            echo "::error::YAML tests skipped with PyYAML installed"
+            exit 1
+          fi
+
+  action:
+    # Runs the composite action from this checkout the way a user's workflow
+    # would, on a Rails-style YAML pair, so the yaml input gets exercised.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./
+        with:
+          paths: tests/fixtures/yaml
+          strict: "true"
+          yaml: "true"
+
   versions:
     # v0.2.0 shipped with 0.1.0 version strings because a bump commit never
     # got staged, and plugin.json sat at 0.1.0 for two more releases. Fail

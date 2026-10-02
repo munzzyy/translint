@@ -107,7 +107,11 @@ Added in 0.5.0:
   yet; missing keys in a `.yml` file are reported like any other finding.
   The `en:` root every Rails file starts with is read through when it names
   the file's own locale (`no:` for Norwegian too, which YAML reads as
-  false), and `devise.de.yml` is compared against `devise.en.yml`.
+  false), and `devise.de.yml` is compared against `devise.en.yml`. The
+  pre-commit hook runs on `.yml`/`.yaml` changes (give it
+  `additional_dependencies: ["PyYAML>=5.1"]`), and the GitHub Action takes
+  `yaml: "true"` to install PyYAML on the runner. CI runs the YAML tests
+  with PyYAML installed.
 
 ## v0.4.0 - 2026-07-15
 

@@ -3,5 +3,5 @@
   description: Check locale files for missing keys, placeholder mismatches, empty and untranslated values.
   entry: translint
   language: python
-  files: \.(json|po|pot|properties)$
+  files: \.(json|po|pot|properties|ya?ml)$
   pass_filenames: false

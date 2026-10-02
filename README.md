@@ -400,6 +400,14 @@ changed in that commit (`pass_filenames: false`) - missing-key detection needs t
 every locale file at once, so a partial file list from a commit that only touched one
 locale would make the comparison meaningless.
 
+For YAML locale files, give the hook PyYAML:
+
+```yaml
+      - id: translint
+        args: [config/locales/, --base, en]
+        additional_dependencies: ["PyYAML>=5.1"]
+```
+
 ## As a GitHub Action
 
 ```yaml
@@ -412,8 +420,9 @@ locale would make the comparison meaningless.
 
 Fails the job the same way the CLI's exit code does. `strict: "true"` also fails on extra
 keys and untranslated-value hits, not just missing keys/mismatches/empty values. The other
-inputs are `format`, `recursive`, `locale-from` and `python-version`; the nested layout is
-`recursive: "true"` plus `locale-from: dir`.
+inputs are `format`, `recursive`, `locale-from`, `yaml` and `python-version`; the nested
+layout is `recursive: "true"` plus `locale-from: dir`, and `yaml: "true"` installs PyYAML
+on the runner first so `.yml`/`.yaml` files can be read.
 
 ## What it does NOT do
 

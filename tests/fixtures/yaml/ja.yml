@@ -1,0 +1,4 @@
+ja:
+  greeting: こんにちは、%{name}さん
+  files:
+    other: "%{count} 個のファイル"

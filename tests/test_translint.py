@@ -2298,3 +2298,10 @@ def test_yaml_rails_plural_set_under_the_locale_root():
                        "ja.yml": "ja:\n  files:\n    other: '%{count} 個のファイル'\n"})
         code, out = run_cli([d, "--base", "en", "--strict"])
         assert code == 0, out
+
+
+@requires_yaml
+def test_yaml_fixtures_are_clean_under_strict():
+    # The CI job that runs the GitHub Action points it at this directory.
+    code, out = run_cli([os.path.join(FIXTURES, "yaml"), "--base", "en", "--strict"])
+    assert code == 0, out

@@ -18,7 +18,7 @@ inputs:
     required: false
     default: "false"
   format:
-    description: Force a format (json/po/properties/yaml) instead of detecting from extension. YAML needs PyYAML on the runner - this action doesn't install it for you.
+    description: Force a format (json/po/properties/yaml) instead of detecting from extension.
     required: false
     default: ""
   recursive:
@@ -29,6 +29,10 @@ inputs:
     description: Where the locale name comes from - "stem" (en.json, the default) or "dir" (en/common.json, the next-i18next layout - use with recursive).
     required: false
     default: "stem"
+  yaml:
+    description: Install PyYAML before linting, so .yml/.yaml locale files can be read. Set to "true" for a Rails or Vue/Nuxt project.
+    required: false
+    default: "false"
   python-version:
     description: Python version to run translint with.
     required: false
@@ -48,9 +52,13 @@ runs:
         TL_FORMAT: ${{ inputs.format }}
         TL_RECURSIVE: ${{ inputs.recursive }}
         TL_LOCALE_FROM: ${{ inputs.locale-from }}
+        TL_YAML: ${{ inputs.yaml }}
         TL_SCRIPT: ${{ github.action_path }}/translint.py
       run: |
         set -e
+        if [ "$TL_YAML" = "true" ]; then
+          python -m pip install --disable-pip-version-check "PyYAML>=5.1"
+        fi
         args=(--base "$TL_BASE")
         if [ "$TL_STRICT" = "true" ]; then
           args+=(--strict)
