@@ -63,6 +63,14 @@ Fixed in 0.5.0:
 - `--fix` works out every write before it makes any. A run that stopped with
   exit 2 on a later namespace (a file that won't decode, a YAML file) could
   already have rewritten the files that came before it.
+- `--fix` no longer writes a second `msgid` for a `.po` entry that's already
+  in the file as fuzzy or obsolete (`#~`), which is what msgmerge leaves
+  behind, or for its own fuzzy entry on a second run. `msgfmt` stopped on the
+  duplicate definition. Those keys are named on stderr instead.
+- `--fix` on a `.properties` file whose last line ends in a continuation
+  backslash puts a blank line first, so the new key no longer becomes part
+  of that value. A dangling backslash at the very end of a file is dropped
+  when reading, the way `java.util.Properties` does it.
 - A YAML file whose aliases repeat it past a million keys exits 2 in under a
   second. 300 bytes of nested aliases used to run for minutes. Anchors and
   `<<: *defaults` merge keys load as before.

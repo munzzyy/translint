@@ -361,6 +361,11 @@ to charge {amount}`:
   formats. There's no way for a fuzzy entry to be mistaken for a finished translation by
   translint or by `msgfmt`.
 
+  A key that reads as missing because its entry is fuzzy or obsolete (`#~`) is still in
+  the file, though, and a second `msgid` makes `msgfmt` refuse the whole file. `--fix`
+  leaves those alone and names them on stderr, which is also why a second `--fix` run
+  doesn't add the same entry again.
+
 What it will never do, on purpose:
 
 - **Never write a real translation.** There's no translation engine here, and there's

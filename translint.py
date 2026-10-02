@@ -518,6 +518,9 @@ def parse_properties(text, path):
         while _properties_line_continues(full):
             i += 1
             if i >= len(lines):
+                # java.util.Properties drops a continuation backslash that
+                # has nothing after it
+                full = full[:-1]
                 break
             full = full[:-1] + lines[i].lstrip()
         # separator is =/: (optionally whitespace-padded) if one is present,
@@ -559,8 +562,14 @@ def parse_po(text, path):
     bare msgid, so two context-disambiguated entries sharing one msgid
     (a "Close" verb vs a "Close" adjective) don't collide - without this,
     the second parsed entry silently overwrites the first."""
-    out = {}
+    return {key: msgstr for key, msgstr, state in _po_entries(text) if state == "live"}
 
+
+def _po_entries(text):
+    """Every entry in a .po file as (key, msgstr, state), state being
+    "live", "fuzzy" or "obsolete". parse_po keeps the live ones; --fix
+    needs the others too, since gettext refuses a file that defines the
+    same msgid twice even when one copy is fuzzy or obsolete."""
     def is_fuzzy_flag(line):
         # "#," starts gettext's flag comment; fuzzy has to be one of the
         # comma-separated flags there. The word "fuzzy" inside a translator
@@ -616,9 +625,15 @@ def parse_po(text, path):
 
     for entry in entries:
         if any(line.startswith("#~") for line in entry):
-            continue
-        if any(is_fuzzy_flag(line) for line in entry):
-            continue
+            # an obsolete entry is the live syntax behind "#~ "; "#~|" lines
+            # are the previous msgid gettext keeps for reference
+            state = "obsolete"
+            entry = [line[2:].strip() for line in entry
+                     if line.startswith("#~") and not line.startswith("#~|")]
+        elif any(is_fuzzy_flag(line) for line in entry):
+            state = "fuzzy"
+        else:
+            state = "live"
         msgid_parts, msgstr_parts, msgctxt_parts = [], [], []
         target = None
         for line in entry:
@@ -663,9 +678,7 @@ def parse_po(text, path):
         msgctxt = "".join(unquote(p) for p in msgctxt_parts)
         if msgid == "":
             continue  # header block
-        key = (msgctxt, msgid) if msgctxt else msgid
-        out[key] = msgstr
-    return out
+        yield (msgctxt, msgid) if msgctxt else msgid, msgstr, state
 
 
 def parse_arb(text, path):
@@ -1607,18 +1620,67 @@ def _properties_escape_value(value):
     return "".join(_PROPERTIES_VALUE_ESCAPES.get(ch, ch) for ch in value)
 
 
+def _properties_ends_in_continuation(text):
+    """Whether the file's last logical line is still open, i.e. ends in an
+    unpaired backslash, so whatever comes next would be read as part of
+    its value."""
+    open_line = False
+    for line in text.splitlines():
+        if open_line:
+            open_line = _properties_line_continues(line)
+        else:
+            stripped = line.lstrip()
+            open_line = (bool(stripped) and stripped[0] not in "#!"
+                         and _properties_line_continues(line))
+    return open_line
+
+
 def fix_missing_keys_properties(text, missing_keys, base):
     """Append every key in missing_keys as a new line at the end of the
     file. .properties has no nesting and no required key order, so unlike
     JSON there's no single "right" place to insert one - appending is both
     the simplest option and the one guaranteed not to touch an existing
-    line."""
+    line. A file whose last line ends in a continuation backslash gets a
+    blank line first, which ends that value where it already ended at EOF
+    instead of letting it swallow the new key."""
     lines = [
         f"{_properties_escape_key(key)}="
         f"{_properties_escape_value(_untranslated_value(_base_value(base, key)))}"
         for key in missing_keys
     ]
-    return text.rstrip("\n") + "\n" + "\n".join(lines) + "\n"
+    sep = "\n\n" if _properties_ends_in_continuation(text) else "\n"
+    return text.rstrip("\n") + sep + "\n".join(lines) + "\n"
+
+
+_PO_SKIP_REASONS = {
+    "fuzzy": "already in the file as a fuzzy entry, translate it and drop the fuzzy flag",
+    "obsolete": "already in the file as an obsolete #~ entry, restore it or delete it",
+}
+
+
+def _fix_po(text, missing_keys, base):
+    """fix_missing_keys_po, plus {key: reason} for the keys it left out.
+
+    A key that's missing because its entry is fuzzy or obsolete is still
+    in the file, and a second msgid makes msgfmt stop with "duplicate
+    message definition". That covers a second --fix run too: the first
+    run's own entry is fuzzy."""
+    inactive = {key: state for key, _msgstr, state in _po_entries(text) if state != "live"}
+    skipped = {key: _PO_SKIP_REASONS[inactive[key]] for key in missing_keys if key in inactive}
+    blocks = []
+    for key in missing_keys:
+        if key in skipped:
+            continue
+        msgctxt, msgid = key if isinstance(key, tuple) else (None, key)
+        lines = ["#, fuzzy"]
+        if msgctxt is not None:
+            lines.append(f"msgctxt {json.dumps(msgctxt, ensure_ascii=False)}")
+        lines.append(f"msgid {json.dumps(msgid, ensure_ascii=False)}")
+        lines.append(f"msgstr {json.dumps(_base_value(base, key), ensure_ascii=False)}")
+        blocks.append("\n".join(lines))
+    if not blocks:
+        return text, skipped
+    return text.rstrip("\n") + "\n\n" + "\n\n".join(blocks) + "\n", skipped
 
 
 def fix_missing_keys_po(text, missing_keys, base):
@@ -1629,17 +1691,9 @@ def fix_missing_keys_po(text, missing_keys, base):
     [UNTRANSLATED] text marker - the fuzzy flag IS the marker here, since
     parse_po already skips fuzzy entries outright (see its docstring), so
     the fixed key still reads back as missing on the next run rather than
-    as a finished translation."""
-    blocks = []
-    for key in missing_keys:
-        msgctxt, msgid = key if isinstance(key, tuple) else (None, key)
-        lines = ["#, fuzzy"]
-        if msgctxt is not None:
-            lines.append(f"msgctxt {json.dumps(msgctxt, ensure_ascii=False)}")
-        lines.append(f"msgid {json.dumps(msgid, ensure_ascii=False)}")
-        lines.append(f"msgstr {json.dumps(_base_value(base, key), ensure_ascii=False)}")
-        blocks.append("\n".join(lines))
-    return text.rstrip("\n") + "\n\n" + "\n\n".join(blocks) + "\n"
+    as a finished translation. A key already present as a fuzzy or obsolete
+    entry is left out (see _fix_po)."""
+    return _fix_po(text, missing_keys, base)[0]
 
 
 # Each returns (new_text, {key: reason}) - the reason naming why a key was
@@ -1647,7 +1701,7 @@ def fix_missing_keys_po(text, missing_keys, base):
 FIX_INSERTERS = {
     "json": _fix_json,
     "arb": _fix_json,
-    "po": lambda text, keys, base, **_: (fix_missing_keys_po(text, keys, base), {}),
+    "po": lambda text, keys, base, **_: _fix_po(text, keys, base),
     "properties": lambda text, keys, base, **_: (
         fix_missing_keys_properties(text, keys, base), {}),
 }
@@ -1820,7 +1874,7 @@ def write_fix(plans, dry_run=False):
                      + (" (dry run, nothing written)" if dry_run else ""))
         lines += done
     if left:
-        lines.append("translint --fix: not inserted, fix these by hand")
+        lines.append("translint --fix: not inserted")
         lines += left
     return "\n".join(lines) if lines else None
 

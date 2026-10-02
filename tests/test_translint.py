@@ -2465,3 +2465,103 @@ def test_cli_fix_inserts_into_arb_without_touching_metadata():
         assert after["bye"] == "[UNTRANSLATED] Goodbye"
         assert "@bye" not in after
         assert after["@hello"] == de["@hello"] and after["@@locale"] == "de"
+
+
+# ---------------------------------------------------------------------------
+# --fix on .po: never a second definition of a msgid the file already has
+# as a fuzzy or obsolete entry; and a .properties file ending mid-value
+# ---------------------------------------------------------------------------
+
+PO_HEADER = (
+    'msgid ""\nmsgstr ""\n'
+    '"Project-Id-Version: demo 1.0\\n"\n"PO-Revision-Date: 2026-01-01 00:00+0000\\n"\n'
+    '"Last-Translator: Nobody <nobody@example.com>\\n"\n'
+    '"Language-Team: German <de@example.com>\\n"\n"Language: de\\n"\n'
+    '"MIME-Version: 1.0\\n"\n"Content-Type: text/plain; charset=UTF-8\\n"\n'
+    '"Content-Transfer-Encoding: 8bit\\n"\n'
+    '"Plural-Forms: nplurals=2; plural=(n != 1);\\n"\n\n'
+)
+PO_EN = PO_HEADER + 'msgid "Save"\nmsgstr "Save"\n\nmsgid "Cancel"\nmsgstr "Cancel"\n'
+
+
+def _msgfmt_accepts(path):
+    import shutil
+    import subprocess
+    msgfmt = shutil.which("msgfmt")
+    if msgfmt is None:
+        return True
+    return subprocess.run([msgfmt, "-c", "-o", os.devnull, path],
+                          capture_output=True).returncode == 0
+
+
+@pytest.mark.parametrize("cancel_entry,state", [
+    ('#, fuzzy\nmsgid "Cancel"\nmsgstr "Abbruch"\n', "fuzzy"),
+    ('#~ msgid "Cancel"\n#~ msgstr "Abbruch"\n', "obsolete"),
+])
+def test_cli_fix_po_leaves_a_fuzzy_or_obsolete_entry_alone(cancel_entry, state):
+    with tempfile.TemporaryDirectory() as d:
+        de = os.path.join(d, "de.po")
+        write_tree(d, {"en.po": PO_EN,
+                       "de.po": PO_HEADER + 'msgid "Save"\nmsgstr "Speichern"\n\n' + cancel_entry})
+        before = open(de, "rb").read()
+        assert _msgfmt_accepts(de)
+        code, out, err = run_cli_err([d, "--base", "en", "--fix", "--json"])
+        assert open(de, "rb").read() == before
+        assert "Cancel" in err and state in err
+        assert json.loads(out)[0]["missing_keys"] == ["Cancel"]
+        assert code == 1
+        assert _msgfmt_accepts(de)
+
+
+def test_cli_fix_po_twice_writes_the_entry_once():
+    with tempfile.TemporaryDirectory() as d:
+        de = os.path.join(d, "de.po")
+        write_tree(d, {"en.po": PO_EN,
+                       "de.po": PO_HEADER + 'msgid "Save"\nmsgstr "Speichern"\n'})
+        run_cli_err([d, "--base", "en", "--fix"])
+        after_first = open(de, "rb").read()
+        assert after_first.count(b'msgid "Cancel"') == 1
+        run_cli_err([d, "--base", "en", "--fix"])
+        assert open(de, "rb").read() == after_first
+        assert _msgfmt_accepts(de)
+
+
+def test_cli_fix_po_fuzzy_check_respects_msgctxt():
+    en = PO_HEADER + ('msgctxt "button"\nmsgid "Close"\nmsgstr "Close"\n\n'
+                      'msgctxt "state"\nmsgid "Close"\nmsgstr "Close"\n')
+    de = PO_HEADER + '#, fuzzy\nmsgctxt "button"\nmsgid "Close"\nmsgstr "Schliessen"\n'
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "de.po")
+        write_tree(d, {"en.po": en, "de.po": de})
+        code, out, err = run_cli_err([d, "--base", "en", "--fix"])
+        text = open(path, encoding="utf-8").read()
+        assert text.count('msgctxt "button"') == 1
+        assert text.count('msgctxt "state"') == 1
+        assert "already in the file as a fuzzy entry" in err
+        assert _msgfmt_accepts(path)
+
+
+def test_parse_po_entries_reports_fuzzy_and_obsolete_states():
+    text = (PO_HEADER + 'msgid "A"\nmsgstr "a"\n\n#, fuzzy\nmsgid "B"\nmsgstr "b"\n\n'
+            '#~ msgid "C"\n#~ msgstr "c"\n\n#~| msgid "old"\n#~ msgid "D"\n#~ msgstr "d"\n')
+    states = {k: st for k, _v, st in translint._po_entries(text)}
+    assert states == {"A": "live", "B": "fuzzy", "C": "obsolete", "D": "obsolete"}
+    assert translint.parse_po(text, "x.po") == {"A": "a"}
+
+
+def test_parse_properties_drops_a_continuation_backslash_at_eof():
+    # java.util.Properties reads "a=Apfel \" at the end of the file as "Apfel "
+    assert translint.parse_properties("a=Apfel \\", "x") == {"a": "Apfel "}
+    assert translint.parse_properties("a=Apfel \\\n", "x") == {"a": "Apfel "}
+
+
+def test_cli_fix_properties_after_an_open_continuation_keeps_both_values():
+    with tempfile.TemporaryDirectory() as d:
+        de = os.path.join(d, "de.properties")
+        write_tree(d, {"en.properties": "a=Apple\nb=Banana\n",
+                       "de.properties": "a=Apfel \\"})
+        before = translint.parse_properties(open(de, encoding="utf-8").read(), de)
+        run_cli_err([d, "--base", "en", "--fix"])
+        after = translint.parse_properties(open(de, encoding="utf-8").read(), de)
+        assert after["a"] == before["a"]
+        assert after["b"] == "[UNTRANSLATED] Banana"
