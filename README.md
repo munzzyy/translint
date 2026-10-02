@@ -102,9 +102,8 @@ curl -LO https://raw.githubusercontent.com/munzzyy/translint/main/translint.py
 python translint.py --help
 ```
 
-There is a `translint` on PyPI, but it's stuck on 0.4.0: no `--fix`, ten known
-bugs still in it, and published under the Prosperity Public License rather than
-GPL-3.0-or-later. Install from here until a newer release lands there.
+PyPI carries 0.5.0 under GPL-3.0-or-later. The 0.3.0 and 0.4.0 artifacts there
+stay under the Prosperity Public License they shipped with.
 
 ## Usage
 
