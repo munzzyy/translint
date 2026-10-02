@@ -4,9 +4,6 @@ The same notes ship as [GitHub releases](https://github.com/munzzyy/translint/re
 
 ## v0.5.0 (unreleased)
 
-Everything below this heading has been sitting unreleased under a v0.4.0
-title. It isn't what v0.4.0 shipped, so it's numbered v0.5.0 now.
-
 **Licensing:** the 0.3.0 and 0.4.0 artifacts on PyPI, and the v0.4.0 tag, are
 under the Prosperity Public License 3.0.0 - free for noncommercial use only.
 The repository was MIT for a while after that, and is now GPL-3.0-or-later.
@@ -45,6 +42,8 @@ Fixed in 0.5.0:
   `"ok": true` in a run that exits 1).
 - The site's install command, usage list and footer license match the README
   again, and the example output uses the paths the CLI actually prints.
+  Install points at the repo rather than PyPI, which is two releases behind
+  and under the old license.
 - `--fix` on a JSON array wrote a second `"days"` member holding
   `{"2": ...}` next to the existing array. JSON parsers keep the last of two
   duplicate members, so the translations already in the array disappeared.
@@ -64,9 +63,42 @@ Fixed in 0.5.0:
 - `--fix` works out every write before it makes any. A run that stopped with
   exit 2 on a later namespace (a file that won't decode, a YAML file) could
   already have rewritten the files that came before it.
+- `%(name)s` with flags, a width or a precision (`%(price).2f`) extracts a
+  token. It extracted nothing, so a translation that dropped one passed.
+- printf length modifiers (`%lu`, `%ld`, `%zd`, `%zu`) and the `%u`/`%c`
+  conversions are recognized.
+- ICU `plural`/`select`/`selectordinal` arguments count as one placeholder,
+  the argument name. The branch text is prose to translate, so a correct
+  French translation of the branches no longer reads as a placeholder
+  mismatch or as untranslated.
+- `.po` entries that aren't separated by a blank line (msgfmt accepts that)
+  no longer merge into one garbage key.
+- A path that exists but has glob characters in its name (`loc[1]`) is used
+  as given instead of failing with "no files match".
+- `msgctxt` keys print as `msgid (msgctxt=...)` in the report and as
+  gettext's own `msgctxt\x04msgid` string in `--json`, instead of a raw
+  tuple and a JSON array.
+- A bare `.properties` key with no separator and no value is an empty value,
+  not a missing key.
+- pyproject.toml lost a leftover non-commercial license classifier that
+  contradicted the license.
 
 Added in 0.5.0:
 
+- `--fix`, scoped narrowly on purpose. It inserts a key that's entirely
+  missing from a locale file, tagged with an unmissable `[UNTRANSLATED]`
+  marker (`.po` gets its own `fuzzy` flag instead, which `parse_po` already
+  treats as not a live translation). A key it inserted keeps failing the run
+  as an `untranslated_markers` finding until someone translates it. It never
+  writes real translated text and never touches a key that already exists:
+  not a placeholder mismatch, not an empty value, and never the
+  identical-to-base heuristic, which stays report-only. It never reformats a
+  file either. A JSON key goes into the object its path names, a `.po` entry
+  or `.properties` line goes at the end of the file, and the diff is the new
+  key(s) plus the one comma JSON needs. It refuses to rewrite a file it can't
+  decode instead of writing U+FFFD back, and keeps a UTF-8 byte-order mark.
+  `--fix --dry-run` previews what would land without writing. Default
+  behavior (report-only, no writes) is unchanged.
 - YAML locale files (`.yml`/`.yaml`) - the default Rails i18n layout and a
   common Vue/Nuxt one. It's the one format that isn't zero-dependency:
   reading a `.yml` file needs `pip install translint[yaml]` (PyYAML), and
@@ -77,19 +109,7 @@ Added in 0.5.0:
   the file's own locale (`no:` for Norwegian too, which YAML reads as
   false), and `devise.de.yml` is compared against `devise.en.yml`.
 
-Carried over from the never-released v0.4.0 notes:
-
-`--fix` - scoped narrowly on purpose. It inserts a key that's entirely missing
-from a locale file, tagged with an unmissable `[UNTRANSLATED]` marker (`.po`
-gets its own `fuzzy` flag instead, which `parse_po` already treats as not a
-live translation, so a fixed key still reads back as missing until someone
-actually translates it). It never writes real translated text, never touches
-a key that already exists - not a placeholder mismatch, not an empty value,
-and never the identical-to-base heuristic, which stays report-only forever -
-and never reformats a file: new keys are appended, so the diff a fix produces
-is exactly the new key(s) and nothing else. `--fix --dry-run` previews what
-would land without writing. Default behavior (report-only, no writes) is
-unchanged; `--fix` is opt-in.
+## v0.4.0 - 2026-07-15
 
 Placeholder-engine correctness release. CONTRIBUTING.md calls placeholder false
 positives the worst bug class this tool can have; an audit found five in the
@@ -111,15 +131,33 @@ first.
   so native2ascii-era Java bundles read as real characters instead of the
   literal string `u00e9`.
 
+More fixes that shipped in the same tag:
+
+- Two bare printf conversions of different types swapped around (`%s ... %d`
+  to `%d ... %s`) are a mismatch. The token multiset is the same, so it read
+  as clean, but the base's argument tuple crashes against the reordered
+  string. A numbered reorder (`%2$d ... %1$s`) is still accepted.
+- `.po` entries with a `msgctxt` are keyed by context and msgid, so two
+  entries sharing one msgid ("Close" the verb and "Close" the adjective) no
+  longer overwrite each other.
+- `.properties` lines that separate key and value with plain whitespace
+  (`key value`), which `java.util.Properties` accepts, are read instead of
+  dropped.
+- The report is printed as UTF-8, so a ja/ar/th run on a Windows console no
+  longer dies partway through.
+
 Repo hygiene in the same release:
 
 - The README stopped promising a paste-your-files browser playground the site
-  doesn't have yet. Install now points at the repo rather than PyPI, which is
-  two releases behind and under the old license.
+  doesn't have yet, and gained a terminal demo.
 - ci.yml pins its actions to full commit SHAs like the other workflows, and a
   new CI job fails the build when the version strings in pyproject.toml,
   translint.py, plugin.json, and the site wordmark disagree. That drift
   shipped once already; plugin.json sat on 0.1.0 for two releases.
+- Checkout no longer persists credentials, and Dependabot bumps the pinned
+  actions after a 7-day cooldown.
+- Releases go to PyPI through a trusted-publishing workflow.
+- CI runs translint over the site's own 32 catalogs.
 - `report()` lost its dead `quiet` parameter; `--quiet` no longer builds a
   report it throws away.
 

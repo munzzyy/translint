@@ -29,7 +29,9 @@ python translint.py locales/ --base en --json
 Point `paths` at the directory holding the locale files (or list specific files), and
 `--base` at the locale name (the filename stem, e.g. `en` for `en.json`) that's the
 reference every other locale gets checked against. Format is auto-detected from the
-extension (`.json`, `.po`/`.pot`, `.properties`); pass `--format` to force one.
+extension (`.json`, `.po`/`.pot`, `.properties`, `.yml`/`.yaml`); pass `--format` to force
+one. YAML needs PyYAML (`pip install translint[yaml]`); without it a `.yml` file exits 2
+with a message saying so.
 
 No `--json`? You get the same information as a grouped human-readable report instead,
 which is easier to skim but not something to parse.
@@ -40,8 +42,8 @@ Exit code is 0 when every locale is clean, 1 when translint found something to f
 a path couldn't be read or parsed at all (bad JSON, unrecognized extension) - so a real
 parse failure and a lint finding never look the same.
 
-With `--json`, you get a list of one result object per locale (or a single object if only
-one non-base locale was checked). Each result has:
+With `--json`, you get a list with one result object per non-base locale file, even when
+only one was checked. Each result has:
 
 - `missing_keys` - present in the base, absent here. Add the key. Plural keys
   (`file_one`/`file_other`, or Rails `one:`/`other:`) follow the locale's own CLDR plural

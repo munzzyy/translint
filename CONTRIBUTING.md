@@ -10,8 +10,9 @@ what actually helps.
   extracted token set, since the placeholder check is the feature that
   actually catches runtime bugs and false positives there are the worst
   kind of bug this tool can have.
-- Format support fixes: a .po or .properties edge case (multi-line values,
-  escaped separators, plural forms) that doesn't parse the way it should.
+- Format support fixes: a .po, .properties or YAML edge case (multi-line
+  values, escaped separators, plural forms) that doesn't parse the way it
+  should.
 - False-positive reports on the untranslated-value heuristic: a
   legitimately translated string that gets flagged anyway. Include the
   base value, the translated value, and whether `--allow-identical` or
@@ -23,9 +24,10 @@ what actually helps.
 - Small, focused features. Check open issues first, there may already be
   one scoped out.
 
-Things that are out of scope: YAML support (it needs a dependency, and
-this tool is stdlib-only on purpose - see the README's "what it does NOT
-do" section), an auto-translate mode of any kind (translint's job is to
+Things that are out of scope: any new dependency (YAML reading is the one
+exception, and it's an optional extra that only gets imported when a YAML
+file is opened, see the README's Formats section), an auto-translate mode
+of any kind (translint's job is to
 tell you what's broken, not guess at a translation - `--fix` only ever
 inserts a key that's missing entirely, tagged so it can never pass for a
 real one, see the README's "Fix mode" section for the exact scoping),
@@ -64,8 +66,8 @@ python translint.py tests/fixtures/json --base en --json
     styles and how their matches get reconciled when two styles overlap
     syntactically (see the comment above them for the two known overlaps
     and why the match order matters).
-  - `parse_json` / `parse_po` / `parse_properties` - one parser per
-    format, each returning a flat `{dotted.key: value}` dict.
+  - `parse_json` / `parse_po` / `parse_properties` / `parse_yaml` - one
+    parser per format, each returning a flat `{dotted.key: value}` dict.
   - `check_locale()` - the comparison itself. Pure function, no I/O, so
     it's the same entry point the CLI and any importer call.
 - Add fixtures under `tests/fixtures/` for anything format- or

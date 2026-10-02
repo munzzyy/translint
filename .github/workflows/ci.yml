@@ -71,6 +71,21 @@ jobs:
               sys.exit(f"site install command is not in the README: {cmd}")
           print(f"install command matches: {cmd}")
           EOF
+      # The README's example block is presented as real output. Fail the
+      # build when a report() or examples/ change leaves it stale.
+      - name: README example output matches the CLI
+        run: |
+          python3 translint.py examples/locales --base en > "$RUNNER_TEMP/example.txt" || test $? -eq 1
+          python3 - "$RUNNER_TEMP/example.txt" <<'EOF'
+          import pathlib
+          import sys
+
+          out = pathlib.Path(sys.argv[1]).read_text()
+          if out not in pathlib.Path("README.md").read_text():
+              sys.exit("README example output is stale, rerun: "
+                       "translint examples/locales --base en")
+          print("README example output matches the CLI")
+          EOF
 
   self-lint:
     # The linter's own site has to pass the linter: extract the site's locale

@@ -122,8 +122,8 @@ translint public/locales/ --recursive --locale-from dir   # en/common.json layou
 ```
 
 `--base` (default `en`) is the locale name - the filename stem, so `en` means `en.json`,
-`en.po`, or `en.properties`, whichever is present - that every other discovered locale
-file gets checked against. Point translint at a directory and it scans every file with a
+`en.po`, `en.properties` or `en.yml`, whichever is present - that every other discovered
+locale file gets checked against. Point translint at a directory and it scans every file with a
 recognized extension; point it at specific files and it checks exactly those.
 
 Exit code is 0 when every locale is clean, 1 when translint found something to fix, and 2
@@ -417,11 +417,11 @@ inputs are `format`, `recursive`, `locale-from` and `python-version`; the nested
 
 ## What it does NOT do
 
-- **No YAML.** YAML locale files (common in Rails, Symfony, some JS i18n setups) aren't
-  supported. Parsing YAML safely needs a dependency (PyYAML, or hand-rolling just enough
-  of the spec to be dangerous), and translint's whole point is zero runtime dependencies.
-  It's a real gap, not an oversight - if enough projects need it, a `--format yaml` behind
-  an optional dependency is the likely shape, but it's not in this version.
+- **YAML needs an extra, and `--fix` doesn't write it.** Reading `.yml`/`.yaml` files
+  takes PyYAML (`pip install translint[yaml]`), the one dependency translint has, and
+  it's optional: nothing imports it until a YAML file is opened. `--fix` reports a
+  missing key in a YAML file but won't insert it, because writing YAML back without
+  reformatting the rest of the file needs more than PyYAML gives you.
 - **The untranslated-value check is a heuristic**, covered honestly above. It flags what
   looks untranslated; it doesn't prove anything, and legitimate identical values need an
   allowlist entry, same as any linter's suppression comment.
