@@ -918,14 +918,29 @@ def _plural_category(key):
     return None
 
 
-def _plural_form_mismatch(base_other, base_tokens, loc_val, loc_tokens, category):
-    """Placeholder check for one plural form against the base's "other"
-    form. The count may be left out of zero/one/two ("One file", "Eine
-    Datei"), and any form may carry it when the base form doesn't ("{{count}}
-    файл" for Russian one, which also covers 21 and 31). few/many/other
-    stand for a range of numbers and have to keep it."""
-    base_rest = [t for t in base_tokens if t not in _COUNT_TOKENS]
-    loc_rest = [t for t in loc_tokens if t not in _COUNT_TOKENS]
+def _plural_form_mismatch(base, key, other_key, category, loc_val, loc_tokens):
+    """Placeholder check for one plural form. It passes when it matches the
+    base's own copy of the same form, or the base's "other" form with the
+    count treated as optional where a single number is meant.
+
+    The count may be left out of zero/one/two ("One file", "Eine Datei"),
+    and any form may carry it when the base form doesn't ("{{count}} файл"
+    for Russian one, which also covers 21 and 31). few/many/other stand for
+    a range of numbers and have to keep it. Besides {{count}}/%{count}, a
+    token the base's "other" form has and its "one" form drops is the
+    count too, under whatever name the app passes it (%{friendly_count})."""
+    if key in base:
+        _, same_tokens = extract_placeholders(base[key])
+        if not _placeholder_mismatch(base[key], same_tokens, loc_val, loc_tokens):
+            return False
+    base_other = base[other_key]
+    _, base_tokens = extract_placeholders(base_other)
+    count_like = set(_COUNT_TOKENS)
+    one_key = other_key[:-len("other")] + "one"
+    if one_key in base:
+        count_like |= set(base_tokens) - set(extract_placeholders(base[one_key])[1])
+    base_rest = [t for t in base_tokens if t not in count_like]
+    loc_rest = [t for t in loc_tokens if t not in count_like]
     if (category in ("few", "many", "other") and len(base_rest) < len(base_tokens)
             and len(loc_rest) == len(loc_tokens)):
         return True
@@ -1021,11 +1036,9 @@ def check_locale(base, locale_dict, locale_name, path, fmt,
             continue
 
         if form:
-            other_val = base[form[0]]
-            _, base_tokens = extract_placeholders(other_val)
+            _, base_tokens = extract_placeholders(base[form[0]])
             _, loc_tokens = extract_placeholders(loc_val)
-            mismatch = _plural_form_mismatch(other_val, base_tokens, loc_val,
-                                             loc_tokens, form[1])
+            mismatch = _plural_form_mismatch(base, key, form[0], form[1], loc_val, loc_tokens)
         else:
             _, base_tokens = extract_placeholders(base_val)
             _, loc_tokens = extract_placeholders(loc_val)

@@ -2638,3 +2638,23 @@ def test_cli_stem_layout_has_no_missing_file_results():
         code, out = run_cli([d, "--json"])
         assert code == 0
         assert len(json.loads(out)) == 1
+
+
+def test_plural_form_may_match_the_base_copy_of_the_same_form():
+    # Rails apps often pass the number under another name; en's one form
+    # leaves it out and so may any other locale's
+    base = {"shared.one": "Shared once", "shared.other": "Shared %{friendly_count} times"}
+    r = _plural_check("de", {"shared.one": "Einmal geteilt",
+                             "shared.other": "%{friendly_count} Mal geteilt"}, base)
+    assert r["placeholder_mismatches"] == []
+
+
+def test_plural_count_under_another_name_is_optional_only_where_one_number_is_meant():
+    base = {"shared.one": "Shared once", "shared.other": "Shared %{friendly_count} times"}
+    loc = {"shared.zero": "لم تتم مشاركته", "shared.one": "تمت مشاركته مرة",
+           "shared.two": "تمت مشاركته مرتين", "shared.few": "%{friendly_count} مرات",
+           "shared.many": "%{friendly_count} مرة", "shared.other": "%{friendly_count} مرة"}
+    assert _plural_check("ar", loc, base)["placeholder_mismatches"] == []
+    loc["shared.few"] = "عدة مرات"
+    r = _plural_check("ar", loc, base)
+    assert [m["key"] for m in r["placeholder_mismatches"]] == ["shared.few"]

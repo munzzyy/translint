@@ -249,12 +249,16 @@ i18next and Rails both use it for a count of 0 in any language. A form that no w
 number up to 1000 falls into, like French `many` (a million and up) or Czech `many`
 (fractions), is allowed but not required.
 
-Every form's placeholders are checked against the base's `other` form. The count can be
-left out of `zero`, `one` and `two` ("One file") and added to any form, but `few`, `many`
-and `other` cover a range of numbers and have to keep it. A lone `_other` key only
-starts a plural set when it has a sibling form or a `{{count}}` in it, so `gender_other`
-next to `gender_male` stays an ordinary key. A locale whose language translint doesn't
-know, and i18next ordinal keys (`_ordinal_one`), get the plain key-by-key comparison.
+A form passes the placeholder check when it matches the base's own copy of that form, or
+the base's `other` form with the count made optional where one number is meant. The count
+can be left out of `zero`, `one` and `two` ("One file") and added to any form, but `few`,
+`many` and `other` cover a range of numbers and have to keep it. The count is
+`{{count}}`/`%{count}`, or any token the base's `other` form has and its `one` form drops,
+so a Rails app passing the number as `%{friendly_count}` works too. A lone `_other` key
+only starts a plural set when it has a sibling form or a `{{count}}` in it, so
+`gender_other` next to `gender_male` stays an ordinary key. A locale whose language
+translint doesn't know, and i18next ordinal keys (`_ordinal_one`), get the plain
+key-by-key comparison.
 
 ## Config
 
