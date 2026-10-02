@@ -63,6 +63,10 @@ Fixed in 0.5.0:
 - `--fix` works out every write before it makes any. A run that stopped with
   exit 2 on a later namespace (a file that won't decode, a YAML file) could
   already have rewritten the files that came before it.
+- With `--locale-from dir`, a locale directory missing a whole namespace
+  file (`de/` with `common.json` but no `footer.json`) was called clean. It's
+  now reported against the path the file should have, with every key in it
+  missing, and `--fix` says it doesn't create files instead of crashing.
 - `--fix` no longer writes a second `msgid` for a `.po` entry that's already
   in the file as fuzzy or obsolete (`#~`), which is what msgmerge leaves
   behind, or for its own fuzzy entry on a second run. `msgfmt` stopped on the

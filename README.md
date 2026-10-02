@@ -148,7 +148,10 @@ translint public/locales/ --recursive --locale-from dir --base en
 
 Files are then grouped by namespace, so `en/common.json` is only ever compared against
 `de/common.json`, never against `de/footer.json`. Every namespace needs a file for the
-base locale; translint says which one is missing it if not. Nested namespace directories
+base locale; translint says which one is missing it if not. A locale that lacks a whole
+namespace file (`de/` has `common.json` but no `footer.json`) is reported against the
+path the file should have, with every key in it missing. `--fix` won't create that file
+for you, so copy the base file to start it. Nested namespace directories
 (`en/admin/billing.json`) work too - the namespace is the whole path below the language
 directory.
 

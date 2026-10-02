@@ -1191,6 +1191,18 @@ def locale_and_namespace(path, root, locale_from="stem", fmt=None):
     return parts[0], os.path.splitext(namespace)[0]
 
 
+def _dir_layout_path(path, root, locale):
+    """Where `locale`'s copy of a file in the --locale-from dir layout would
+    be: the same path with the locale directory swapped."""
+    parts = os.path.relpath(path, root).split(os.sep)
+    if len(parts) >= 2:
+        return os.path.join(root, locale, *parts[1:])
+    locale_dir = os.path.dirname(path)
+    parent = (os.path.dirname(locale_dir) if locale_dir
+              else os.path.dirname(os.path.abspath(".")))
+    return os.path.join(parent, locale, os.path.basename(path))
+
+
 def report(results):
     lines = []
     any_issues = False
@@ -1817,6 +1829,10 @@ def _read_for_fix(path, fmt=None, encoding=None):
         raise NotUTF8Error(path, "utf-8")
 
 
+_NO_FILE_REASON = ("the file doesn't exist and --fix doesn't create files, "
+                   "copy the base file to start it")
+
+
 def plan_fix(results, base, base_nested=None, encoding=None, base_tree=None):
     """Work out every write --fix would make for these results without
     making any of them. Returns a list of (result, new file bytes or None,
@@ -1830,6 +1846,9 @@ def plan_fix(results, base, base_nested=None, encoding=None, base_tree=None):
     plans = []
     for r in results:
         if not r["missing_keys"]:
+            continue
+        if not os.path.exists(r["path"]):
+            plans.append((r, None, [], {k: _NO_FILE_REASON for k in r["missing_keys"]}))
             continue
         if r["format"] not in FIX_INSERTERS:
             raise ValueError(
@@ -1865,8 +1884,11 @@ def write_fix(plans, dry_run=False):
             keys_display = ", ".join(_key_display(k) for k in inserted)
             done.append(f"  {r['locale']} ({r['path']}): "
                         f"{len(inserted)} key(s) - {keys_display}")
+        by_reason = {}
         for key, reason in skipped.items():
-            left.append(f"  {r['locale']} ({r['path']}): {_key_display(key)} - {reason}")
+            by_reason.setdefault(reason, []).append(_key_display(key))
+        for reason, keys in by_reason.items():
+            left.append(f"  {r['locale']} ({r['path']}): {', '.join(keys)} - {reason}")
     lines = []
     if done:
         verb = "would insert" if dry_run else "inserted"
@@ -2036,9 +2058,11 @@ def main(argv=None):
     # with its own base, so en/common.json is only ever diffed against
     # de/common.json.
     by_namespace = {}
+    roots = {}
     for path, root in entries:
         locale, namespace = locale_and_namespace(path, root, args.locale_from, args.format)
         by_namespace.setdefault(namespace, []).append((locale, path))
+        roots[path] = root
 
     groups = []
     for namespace, members in by_namespace.items():
@@ -2050,12 +2074,31 @@ def main(argv=None):
                   file=sys.stderr)
             return 2
         try:
-            base_dict, _base_fmt = load_locale(base_path, fmt=args.format,
-                                               encoding=args.encoding)
+            base_dict, base_fmt = load_locale(base_path, fmt=args.format,
+                                              encoding=args.encoding)
         except (ValueError, OSError) as exc:
             print(f"translint: {exc}", file=sys.stderr)
             return 2
-        groups.append({"base_path": base_path, "base": base_dict, "members": members})
+        groups.append({"base_path": base_path, "base": base_dict, "base_fmt": base_fmt,
+                       "members": list(members), "absent": set()})
+
+    # In the dir layout a locale directory can lack a whole namespace file,
+    # which is every key in it missing at once. Each locale seen anywhere
+    # gets a result for every namespace, against the path the file would
+    # have. A file that exists but wasn't named on the command line was
+    # left out on purpose and stays out.
+    if args.locale_from == "dir":
+        seen = sorted({loc for members in by_namespace.values() for loc, _ in members})
+        for group in groups:
+            have = {loc for loc, _ in group["members"]}
+            for locale in seen:
+                if locale in have:
+                    continue
+                expected = _dir_layout_path(group["base_path"], roots[group["base_path"]],
+                                            locale)
+                if not os.path.exists(expected):
+                    group["members"].append((locale, expected))
+                    group["absent"].add(expected)
 
     # A plain function, not a loop inlined twice: --fix needs this exact same
     # check re-run against the files it just rewrote, so the report and exit
@@ -2069,6 +2112,12 @@ def main(argv=None):
         for group in groups:
             for locale, f in group["members"]:
                 if f == group["base_path"]:
+                    continue
+                if f in group["absent"] and not os.path.exists(f):
+                    out.append((group, check_locale(
+                        group["base"], {}, locale, f, group["base_fmt"],
+                        do_not_translate=do_not_translate, allow_identical=allow_identical,
+                    )))
                     continue
                 try:
                     locale_dict, fmt = load_locale(f, fmt=args.format,

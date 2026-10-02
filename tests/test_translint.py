@@ -2565,3 +2565,76 @@ def test_cli_fix_properties_after_an_open_continuation_keeps_both_values():
         after = translint.parse_properties(open(de, encoding="utf-8").read(), de)
         assert after["a"] == before["a"]
         assert after["b"] == "[UNTRANSLATED] Banana"
+
+
+# ---------------------------------------------------------------------------
+# --locale-from dir: a locale directory missing a whole namespace file
+# ---------------------------------------------------------------------------
+
+MISSING_NS_TREE = {
+    "loc/en/common.json": '{"a": "Apple"}',
+    "loc/en/footer.json": '{"x": "Footer text"}',
+    "loc/de/common.json": '{"a": "Apfel"}',
+    "loc/fr/common.json": '{"a": "Pomme"}',
+    "loc/fr/footer.json": '{"x": "Texte de pied de page"}',
+}
+
+
+def test_cli_dir_layout_reports_a_missing_namespace_file():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, MISSING_NS_TREE)
+        loc = os.path.join(d, "loc")
+        code, out = run_cli([loc, "--recursive", "--locale-from", "dir", "--json"])
+        assert code == 1
+        results = json.loads(out)
+        for r in results:
+            assert set(r) == translint.JSON_SCHEMA_KEYS
+        missing = [r for r in results if r["missing_keys"]]
+        assert len(missing) == 1
+        assert missing[0]["locale"] == "de"
+        assert missing[0]["path"] == os.path.join(loc, "de", "footer.json")
+        assert missing[0]["missing_keys"] == ["x"]
+        assert missing[0]["format"] == "json"
+
+
+def test_cli_dir_layout_counts_every_locale_seen_in_any_namespace():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {"loc/en/common.json": '{"a": "Apple"}',
+                       "loc/en/footer.json": '{"x": "Footer text"}',
+                       "loc/de/footer.json": '{"x": "Fusszeile"}'})
+        code, out = run_cli([os.path.join(d, "loc"), "--recursive", "--locale-from", "dir",
+                             "--json"])
+        assert code == 1
+        [r] = [r for r in json.loads(out) if r["missing_keys"]]
+        assert os.path.basename(r["path"]) == "common.json" and r["missing_keys"] == ["a"]
+
+
+def test_cli_fix_names_a_missing_namespace_file_instead_of_crashing():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, MISSING_NS_TREE)
+        loc = os.path.join(d, "loc")
+        code, out, err = run_cli_err([loc, "--recursive", "--locale-from", "dir", "--fix"])
+        assert code == 1
+        assert "doesn't create files" in err
+        assert os.path.join(loc, "de", "footer.json") in err
+        assert not os.path.exists(os.path.join(loc, "de", "footer.json"))
+
+
+def test_cli_dir_layout_leaves_out_a_file_that_exists_but_was_not_named():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, dict(MISSING_NS_TREE, **{"loc/de/footer.json": '{"x": "Fusszeile"}'}))
+        loc = os.path.join(d, "loc")
+        code, out = run_cli([os.path.join(loc, "en", "common.json"),
+                             os.path.join(loc, "en", "footer.json"),
+                             os.path.join(loc, "de", "common.json"),
+                             "--locale-from", "dir", "--json"])
+        assert code == 0
+        assert [os.path.basename(r["path"]) for r in json.loads(out)] == ["common.json"]
+
+
+def test_cli_stem_layout_has_no_missing_file_results():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {"en.json": '{"a": "Apple"}', "de.json": '{"a": "Apfel"}'})
+        code, out = run_cli([d, "--json"])
+        assert code == 0
+        assert len(json.loads(out)) == 1
