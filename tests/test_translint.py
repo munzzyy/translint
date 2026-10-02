@@ -1864,8 +1864,7 @@ def test_cli_fix_refuses_when_the_value_will_not_fit_the_file_encoding():
 
 
 # ---------------------------------------------------------------------------
-# --fix: arrays, keys that would shadow an existing member, and
-# all-or-nothing writes across namespace groups
+# --fix: arrays, shadowed members, all-or-nothing writes across groups
 # ---------------------------------------------------------------------------
 
 
@@ -1927,8 +1926,7 @@ def test_cli_fix_numeric_object_keys_still_go_into_the_object():
 
 
 def test_cli_fix_leaves_out_a_key_that_would_shadow_a_value_of_another_shape():
-    # de has "nav" as a plain string where the base has an object; writing
-    # a second "nav" member would hide the first from every JSON parser
+    # a second "nav" member would hide the existing one from every JSON parser
     with tempfile.TemporaryDirectory() as d:
         write_tree(d, {
             "en.json": '{\n  "nav": {\n    "home": "Home"\n  },\n  "title": "Shop"\n}\n',
@@ -2308,8 +2306,7 @@ def test_yaml_fixtures_are_clean_under_strict():
 
 
 # ---------------------------------------------------------------------------
-# Input hardening: YAML alias expansion, config validation and discovery,
-# and a path that doesn't exist
+# Input hardening: YAML aliases, config checks and discovery, missing paths
 # ---------------------------------------------------------------------------
 
 
@@ -2468,8 +2465,7 @@ def test_cli_fix_inserts_into_arb_without_touching_metadata():
 
 
 # ---------------------------------------------------------------------------
-# --fix on .po: never a second definition of a msgid the file already has
-# as a fuzzy or obsolete entry; and a .properties file ending mid-value
+# --fix on fuzzy/obsolete .po entries and a .properties file ending mid-value
 # ---------------------------------------------------------------------------
 
 PO_HEADER = (
@@ -2641,8 +2637,7 @@ def test_cli_stem_layout_has_no_missing_file_results():
 
 
 def test_plural_form_may_match_the_base_copy_of_the_same_form():
-    # Rails apps often pass the number under another name; en's one form
-    # leaves it out and so may any other locale's
+    # Rails apps pass the number under other names, and en's one form drops it
     base = {"shared.one": "Shared once", "shared.other": "Shared %{friendly_count} times"}
     r = _plural_check("de", {"shared.one": "Einmal geteilt",
                              "shared.other": "%{friendly_count} Mal geteilt"}, base)
@@ -2661,8 +2656,7 @@ def test_plural_count_under_another_name_is_optional_only_where_one_number_is_me
 
 
 def test_icu_more_plural_branches_than_the_base_is_not_a_mismatch():
-    # Arabic has six plural branches where English has two, and each one
-    # repeats the number; that's one placeholder, not six
+    # six Arabic branches that each repeat {n} are still one placeholder
     base = {"r": "{n, plural, =0{No restaurants} =1{1 restaurant} other{{n} restaurants}}"}
     loc = {"r": "{n, plural, zero{لا مطاعم} one{مطعم واحد} two{مطعمان} "
                 "few{{n} مطاعم} many{{n} مطعمًا} other{{n} مطعم}}"}

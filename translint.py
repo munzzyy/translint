@@ -93,9 +93,7 @@ EXT_TO_FORMAT = {
 # is why doublebrace/dollar run before brace, and printf runs before dollar.
 # ---------------------------------------------------------------------------
 
-# i18next also allows a format after a comma ({{val, number}},
-# {{price, currency(USD)}}) and a "-" for unescaped output ({{- name}}).
-# Both are the same {{name}} argument as far as the caller is concerned.
+# i18next {{val, number}} (format) and {{- name}} (unescaped) are still {{val}} / {{name}}.
 _DOUBLEBRACE_RE = r"\{\{\s*-?\s*([\w.]+)\s*(?:,[^{}]*)?\}\}"
 _RX_DOUBLEBRACE = re.compile(_DOUBLEBRACE_RE)
 _RX_BRACE = re.compile(r"\{([A-Za-z_][\w.]*|\d*)\}")
@@ -154,9 +152,7 @@ def _spans_contain(spans, m):
 
 _RX_ICU_HEAD = re.compile(r"^\s*([A-Za-z_]\w*)\s*,\s*(?:plural|selectordinal|select)\s*,")
 
-# A typed argument, {amount, number, currency} or Java's {0,number,integer},
-# is the argument {amount} / {0} with formatting attached. Only ICU's own
-# types count, so "{a, b}" in prose stays prose.
+# {amount, number, currency} is {amount}; only ICU's own types, so "{a, b}" stays prose.
 _ICU_TYPED_RE = (r"\{\s*([A-Za-z_]\w*|\d+)\s*,\s*"
                  r"(?:number|date|time|spellout|ordinal|duration)\s*(?:,[^{}]*)?\}")
 _RX_ICU_TYPED = re.compile(_ICU_TYPED_RE)
@@ -260,9 +256,8 @@ def extract_placeholders(value):
     # ICU plural/select args first: take the argument name as the token,
     # exclude the whole block from the flat regexes below (so branch-body
     # braces aren't read as their own placeholders), and recurse into each
-    # branch to pick up any nested placeholder. A nested placeholder counts
-    # once per argument however many branches use it, since Arabic has six
-    # plural branches where English has two.
+    # branch to pick up any nested placeholder.
+    # Nested tokens count once per argument: Arabic has six plural branches to English's two.
     icu_tokens, icu_spans, icu_bodies = _icu_scan(value)
     if icu_tokens:
         tokens += icu_tokens
@@ -413,8 +408,7 @@ def parse_json(text, path):
     return flatten_json(data)
 
 
-# No real locale file comes near this; an alias bomb passes it in a few
-# hundred bytes.
+# No real locale file comes near this; a YAML alias bomb passes it in a few hundred bytes.
 YAML_MAX_KEYS = 1_000_000
 
 
@@ -523,8 +517,7 @@ def parse_properties(text, path):
         while _properties_line_continues(full):
             i += 1
             if i >= len(lines):
-                # java.util.Properties drops a continuation backslash that
-                # has nothing after it
+                # java.util.Properties drops a continuation backslash at EOF
                 full = full[:-1]
                 break
             full = full[:-1] + lines[i].lstrip()
@@ -630,8 +623,7 @@ def _po_entries(text):
 
     for entry in entries:
         if any(line.startswith("#~") for line in entry):
-            # an obsolete entry is the live syntax behind "#~ "; "#~|" lines
-            # are the previous msgid gettext keeps for reference
+            # live syntax behind "#~ "; a "#~|" line is the previous msgid
             state = "obsolete"
             entry = [line[2:].strip() for line in entry
                      if line.startswith("#~") and not line.startswith("#~|")]
@@ -807,23 +799,7 @@ def _letter_count(s):
 
 
 # ---------------------------------------------------------------------------
-# Plural keys
-#
-# i18next writes one key per CLDR plural category (file_one, file_other),
-# and Rails nests them (file: {one: ..., other: ...}). Which categories a
-# locale needs depends on its language, not on the base: Japanese has only
-# "other", Russian has one/few/many/other. Comparing the sets plainly fails
-# a correct ja file for lacking file_one and calls a correct ru file_few an
-# extra key.
-#
-# The table is CLDR's cardinal categories as Node's Intl.PluralRules reports
-# them (tests/test_translint.py checks it against node when node is on
-# PATH). A category marked "?" is one no whole number from 0 to 1000 picks:
-# French "many" is for a million and up, Czech "many" for fractions. A count
-# in an app is almost always a small whole number, so those are allowed but
-# not required. "other" is always required, and "zero" is always allowed,
-# since i18next and Rails both use a zero key for a count of 0 in every
-# language.
+# Plural keys: CLDR categories per Node's Intl.PluralRules; "?" = no whole number to 1000 uses it.
 # ---------------------------------------------------------------------------
 
 _PLURAL_CATEGORIES = ("zero", "one", "two", "few", "many", "other")
@@ -988,10 +964,7 @@ def check_locale(base, locale_dict, locale_name, path, fmt,
     base_keys = set(base.keys())
     locale_keys = set(locale_dict.keys())
 
-    # Plural sets follow the locale's own CLDR categories (see "Plural keys"
-    # above). plural_forms maps each form this locale may have to the base's
-    # "other" key and the form's category. An unknown language keeps the
-    # plain comparison.
+    # plural_forms: each form this locale may have -> (base "other" key, category)
     expected = set(base_keys)
     plural_forms = {}
     groups = _plural_groups(base) if fmt in ("json", "yaml") else {}
@@ -1151,8 +1124,7 @@ def locale_name_from_path(path):
     return os.path.splitext(os.path.basename(path))[0]
 
 
-# app_en.arb, app_pt_BR.arb, my_app_zh_Hant_TW.arb: Flutter's gen-l10n naming,
-# a prefix and then the locale with underscores.
+# Flutter gen-l10n names: app_en.arb, app_pt_BR.arb, my_app_zh_Hant_TW.arb
 _RX_ARB_STEM = re.compile(r"^(.+?)_([a-z]{2,3}(?:_[A-Z][a-z]{3})?(?:_(?:[A-Z]{2}|\d{3}))?)$")
 
 
@@ -1583,8 +1555,7 @@ def _fix_json(text, missing_keys, base, base_nested=None, base_tree=None):
             member_indent = _json_member_indent(text, obj_open, obj_close, fallback)
             text = _json_splice(text, obj_close, _json_insert_block(tree, indent, member_indent))
             continue
-        # An array only grows at its end, one element after another; an
-        # index past a gap has nowhere to go.
+        # An array only grows at its end; an index past a gap has nowhere to go.
         have = len(_json_shape_at(data, prefix))
         by_index = {}
         for rest, value in entries:
@@ -1726,8 +1697,7 @@ def fix_missing_keys_po(text, missing_keys, base):
     return _fix_po(text, missing_keys, base)[0]
 
 
-# Each returns (new_text, {key: reason}) - the reason naming why a key was
-# left out rather than written.
+# Each returns (new_text, {key left out: reason}).
 FIX_INSERTERS = {
     "json": _fix_json,
     "arb": _fix_json,
@@ -2032,8 +2002,7 @@ def main(argv=None):
     allow_identical = list(args.allow_identical)
     do_not_translate = list(args.do_not_translate)
 
-    # A .translintrc.json next to the locale files applies however they were
-    # named: as the directory, as a glob, or one by one.
+    # The config next to the files applies whether they came as a dir, a glob or one by one.
     config_path = args.config
     if config_path is None:
         candidates = [p for p in expanded if os.path.isdir(p)]
@@ -2100,11 +2069,7 @@ def main(argv=None):
         groups.append({"base_path": base_path, "base": base_dict, "base_fmt": base_fmt,
                        "members": list(members), "absent": set()})
 
-    # In the dir layout a locale directory can lack a whole namespace file,
-    # which is every key in it missing at once. Each locale seen anywhere
-    # gets a result for every namespace, against the path the file would
-    # have. A file that exists but wasn't named on the command line was
-    # left out on purpose and stays out.
+    # A file that exists but wasn't named on the command line was left out on purpose.
     if args.locale_from == "dir":
         seen = sorted({loc for members in by_namespace.values() for loc, _ in members})
         for group in groups:
