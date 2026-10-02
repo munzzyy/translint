@@ -381,12 +381,18 @@ def flatten_json(obj, prefix="", limit=None):
     limit caps the number of keys walked, nested objects and lists
     included: past it, ValueError. YAML aliases let a few hundred bytes
     reference the same list over and over, and walking every reference
-    would run for minutes even when the lists are empty."""
+    would run for minutes even when the lists are empty. An alias inside
+    its own anchor makes a list that contains itself, which never ends,
+    so that is a ValueError too."""
     out = {}
     walked = 0
+    inside = set()
     stack = [(prefix, obj)]
     while stack:
         key, node = stack.pop()
+        if key is None:
+            inside.discard(id(node))
+            continue
         if isinstance(node, dict):
             items = node.items()
         elif isinstance(node, list):
@@ -396,8 +402,12 @@ def flatten_json(obj, prefix="", limit=None):
             continue
         walked += len(node)
         if limit is not None and walked > limit:
-            raise ValueError(f"more than {limit:,} keys")
+            raise ValueError(f"expands to more than {limit:,} keys")
+        if id(node) in inside:
+            raise ValueError("has a list or mapping that contains itself")
         if node:
+            inside.add(id(node))
+            stack.append((None, node))
             stack.extend(reversed([(f"{key}.{k}" if key else str(k), v) for k, v in items]))
     return out
 
@@ -448,7 +458,7 @@ def parse_yaml(text, path):
     try:
         return flatten_json(data, limit=YAML_MAX_KEYS)
     except ValueError as exc:
-        raise ValueError(f"{path}: expands to {exc}, refusing to read it "
+        raise ValueError(f"{path}: {exc}, refusing to read it "
                          f"(YAML aliases repeating the same content?)")
 
 

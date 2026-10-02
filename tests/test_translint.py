@@ -2349,6 +2349,25 @@ def test_yaml_alias_bomb_of_empty_lists_is_refused_quickly(levels, size):
 
 
 @requires_yaml
+@pytest.mark.parametrize("text", ["a: &a [*a]\n", "a: &a {b: [x, *a]}\n"])
+def test_yaml_alias_inside_its_own_anchor_is_refused(text):
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {"en.yml": "a: x\n", "de.yml": text})
+        code, out, err = run_cli_err([d, "--base", "en"])
+        assert code == 2
+        assert "contains itself" in err
+
+
+def test_flatten_json_refuses_a_list_that_contains_itself():
+    loop = ["x"]
+    loop.append(loop)
+    with pytest.raises(ValueError, match="contains itself"):
+        translint.flatten_json({"a": loop}, limit=1000)
+    shared = ["x"]
+    assert translint.flatten_json({"a": [shared, shared]}) == {"a.0.0": "x", "a.1.0": "x"}
+
+
+@requires_yaml
 def test_yaml_aliases_under_the_cap_still_load():
     assert len(translint.parse_yaml(_alias_bomb(3), "x.yml")) == 1110
 

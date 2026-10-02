@@ -85,7 +85,8 @@ Fixed in 0.5.0:
 - A YAML file whose aliases repeat it past a million keys exits 2 in under a
   second. 300 bytes of nested aliases used to run for minutes. Nested lists
   count toward the million as well as keys, so aliases repeating empty lists
-  are refused too. Anchors and `<<: *defaults` merge keys load as before.
+  are refused too, and so is an alias inside its own anchor (`a: &a [*a]`),
+  which ran forever. Anchors and `<<: *defaults` merge keys load as before.
 - `.translintrc.json` is checked. `"allow_identical": "brand"` exits 2
   instead of quietly becoming `["b", "r", "a", "n", "d"]`, and an unknown
   key like `allow-identical` gets a warning. The file is also found next to

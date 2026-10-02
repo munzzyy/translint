@@ -10,6 +10,7 @@ regex processing. A malicious locale file can't run code through translint.
 YAML aliases can make a few hundred bytes expand to millions of keys, so a
 YAML file that expands past a million is refused before it can stall a CI run.
 Nested lists and mappings count toward that million too, empty ones included.
+An alias inside its own anchor never stops expanding and is refused on sight.
 
 By default it doesn't write anything besides its own stdout. The one opt-in
 exception is `--fix`, which rewrites the locale files you pass it. It only
