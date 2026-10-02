@@ -10,6 +10,13 @@ The repository was MIT for a while after that, and is now GPL-3.0-or-later.
 The old PyPI pages keep advertising Prosperity forever, so if you installed
 translint from PyPI before this release, that's the license you got.
 
+**Upgrading:** plural keys now follow each language's own CLDR forms, so the
+first run on 0.5.0 can report findings 0.4.0 never did. A Russian or Polish
+file with only `_one` and `_other` is missing `_few` and `_many`, an Arabic
+one also `_zero` and `_two`, and a `_one` key in a Japanese, Korean or Chinese
+file is now extra. Those are real findings. If one looks wrong, please open an
+issue with the file.
+
 Fixed in 0.5.0:
 
 - `--fix` on a nested JSON file wrote a flat `"nav.settings"` member next to
@@ -61,12 +68,12 @@ Fixed in 0.5.0:
   a translation that dropped one passed. A value that is only `{{ name }}`
   (with spaces) is no longer called possibly untranslated.
 - `--fix` works out every write before it makes any. A run that stopped with
-  exit 2 on a later namespace (a file that won't decode, a YAML file) could
+  exit 2 on a later namespace (a file that will not decode, a YAML file) could
   already have rewritten the files that came before it.
 - With `--locale-from dir`, a locale directory missing a whole namespace
-  file (`de/` with `common.json` but no `footer.json`) was called clean. It's
+  file (`de/` with `common.json` but no `footer.json`) was called clean. It is
   now reported against the path the file should have, with every key in it
-  missing, and `--fix` says it doesn't create files instead of crashing.
+  missing, and `--fix` says it does not create files instead of crashing.
 - `--fix` no longer writes a second `msgid` for a `.po` entry that's already
   in the file as fuzzy or obsolete (`#~`), which is what msgmerge leaves
   behind, or for its own fuzzy entry on a second run. `msgfmt` stopped on the
@@ -131,7 +138,7 @@ Added in 0.5.0:
   common Vue/Nuxt one. It's the one format that isn't zero-dependency:
   reading a `.yml` file needs `pip install translint[yaml]` (PyYAML), and
   `yaml` is only imported the moment a YAML file is actually loaded, so
-  every other format still needs nothing. `--fix` doesn't write YAML back
+  every other format still needs nothing. `--fix` does not write YAML back
   yet; missing keys in a `.yml` file are reported like any other finding.
   The `en:` root every Rails file starts with is read through when it names
   the file's own locale (`no:` for Norwegian too, which YAML reads as

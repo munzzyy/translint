@@ -1,6 +1,6 @@
 # Contributing to translint
 
-Thanks for looking at this. It's a small, single-maintainer project, so here's
+Thanks for looking at this. It is a small, single-maintainer project, so here is
 what actually helps.
 
 ## What's wanted
@@ -11,7 +11,7 @@ what actually helps.
   actually catches runtime bugs and false positives there are the worst
   kind of bug this tool can have.
 - Format support fixes: a .po, .properties or YAML edge case (multi-line
-  values, escaped separators, plural forms) that doesn't parse the way it
+  values, escaped separators, plural forms) that does not parse the way it
   should.
 - False-positive reports on the untranslated-value heuristic: a
   legitimately translated string that gets flagged anyway. Include the
@@ -21,11 +21,12 @@ what actually helps.
 - Bug fixes, especially anything Windows-specific (this tool is used from
   PowerShell as much as bash, and path/encoding bugs tend to show up there
   first).
-- Small, focused features. Check open issues first, there may already be
-  one scoped out.
+- Small, focused features. Check the
+  [open issues](https://github.com/munzzyy/translint/issues) first. There may
+  already be one scoped out.
 
 Things that are out of scope: any new dependency (YAML reading is the one
-exception, and it's an optional extra that only gets imported when a YAML
+exception, and it is an optional extra that only gets imported when a YAML
 file is opened, see the README's Formats section), an auto-translate mode
 of any kind (translint's job is to
 tell you what's broken, not guess at a translation - `--fix` only ever
@@ -33,7 +34,7 @@ inserts a key that's missing entirely, tagged so it can never pass for a
 real one, see the README's "Fix mode" section for the exact scoping),
 and anything that adds a network call. A PR that adds a dependency, a
 network call, or that widens `--fix` to touch a key that already
-exists won't be merged, no matter how good the feature is.
+exists will not be merged, no matter how good the feature is.
 
 ## Dev setup
 
@@ -45,7 +46,7 @@ cd translint
 python -m pytest tests/ -q
 ```
 
-That's it. Standard library only, so there's nothing to `pip install`
+That's it. Standard library only, so there is nothing to `pip install`
 beyond `pytest` for running the test suite and `ruff` if you want to run
 the same lint CI runs. Python 3.10+ (the CI matrix covers 3.10 through
 3.14 on Ubuntu and Windows, check `.github/workflows/ci.yml` for the exact
@@ -60,7 +61,7 @@ python translint.py tests/fixtures/json --base en --json
 
 ## Making a change
 
-- `translint.py` is the whole tool. The parts you'll touch most:
+- `translint.py` is the whole tool. The parts you will touch most:
   - `_RX_BRACE` / `_RX_DOUBLEBRACE` / `_RX_PYNAMED` / `_RX_PRINTF` /
     `_RX_DOLLAR` and `extract_placeholders()` - the five placeholder
     styles and how their matches get reconciled when two styles overlap
@@ -70,7 +71,7 @@ python translint.py tests/fixtures/json --base en --json
     `parse_arb` - one parser per format, each returning a flat
     `{dotted.key: value}` dict.
   - `check_locale()` - the comparison itself. Pure function, no I/O, so
-    it's the same entry point the CLI and any importer call.
+    it is the same entry point the CLI and any importer call.
 - Add fixtures under `tests/fixtures/` for anything format- or
   placeholder-related rather than only inline strings in the test file -
   the existing fixture directories (`json/`, `po/`, `properties/`,
@@ -88,8 +89,8 @@ python translint.py tests/fixtures/json --base en --json
   ```
 
 - Match the existing style: plain, direct comments, no type hints (the
-  code doesn't use them anywhere), keep it stdlib-only. If a change needs
-  a dependency, it's probably out of scope for this tool.
+  code does not use them anywhere), keep it stdlib-only. If a change needs
+  a dependency, it is probably out of scope for this tool.
 
 ## Opening a PR
 
@@ -98,9 +99,9 @@ python translint.py tests/fixtures/json --base en --json
 - Explain what you tested it against, especially for placeholder-style or
   parser changes, since the risk is always a false positive/negative on a
   legitimate translation.
-- I'll review these as I have time. This is a side project I maintain
-  solo, so response time varies, don't read silence as a no. If it's been
-  a couple weeks with no response, a polite bump is fine.
+- I will review these as I have time. This is a side project I maintain
+  solo, so response time varies, do not read silence as a no. If it has been
+  a couple of weeks with no response, a polite bump is fine.
 
 ## Reporting bugs / requesting features
 
@@ -114,5 +115,5 @@ change under the same GPL license.
 
 ## Security issues
 
-Don't open a public issue for anything security-sensitive. See
+Do not open a public issue for anything security-sensitive. See
 [SECURITY.md](SECURITY.md).

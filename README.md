@@ -3,7 +3,7 @@
 **A missing translation is a UI bug. A renamed placeholder is a crash.** translint checks
 your locale files against a base and flags exactly that: missing keys, stale extra keys,
 empty values, values that still look untranslated, and the one that actually takes an app
-down: placeholder tokens that don't match between the base string and the translation.
+down: placeholder tokens that do not match between the base string and the translation.
 
 [![CI](https://github.com/munzzyy/translint/actions/workflows/ci.yml/badge.svg)](https://github.com/munzzyy/translint/actions/workflows/ci.yml)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
@@ -66,13 +66,13 @@ the same everywhere. That's the heuristic working, and it's also exactly what
 
 The one that matters most is `checkout.confirm`: the base string interpolates
 `{amount}` and `{last4}`, but the French translation interpolates `{total}` and
-`{last4}` - `{amount}` never got translated in, `{total}` isn't a placeholder the code
-knows about. That code renders fine in every test that doesn't pass real interpolation
+`{last4}` - `{amount}` never got translated in, `{total}` is not a placeholder the code
+knows about. That code renders fine in every test that does not pass real interpolation
 data, and throws the moment it does.
 
 ## As an agent skill
 
-Point your coding agent at translint and it'll check its own i18n changes before handing
+Point your coding agent at translint and it will check its own i18n changes before handing
 a PR back to you. Two install paths, pick whichever your agent supports:
 
 ```bash
@@ -86,7 +86,7 @@ npx skills add munzzyy/translint
 
 Either way, the agent gets [SKILL.md](skills/translint/SKILL.md): when to run it (after
 adding or editing locale keys, before finalizing an i18n PR) and how to read the result.
-Ask the agent something like "check the locale files before you finish this PR" and it'll
+Ask the agent something like "check the locale files before you finish this PR" and it will
 run `translint.py --json` on the locale directory and act on what comes back.
 
 ## Install
@@ -127,10 +127,10 @@ locale file gets checked against. Point translint at a directory and it scans ev
 recognized extension; point it at specific files and it checks exactly those.
 
 Exit code is 0 when every locale is clean, 1 when translint found something to fix, and 2
-if a path couldn't be read or parsed at all - a bad-JSON error and a real lint finding
+if a path could not be read or parsed at all - a bad-JSON error and a real lint finding
 never look the same to a script. By default only missing keys, placeholder mismatches,
 and empty values fail the run; extra keys and untranslated-value heuristic hits are
-reported but don't fail unless you pass `--strict` - both are far more likely to have a
+reported but do not fail unless you pass `--strict` - both are far more likely to have a
 legitimate explanation (a key mid-removal, a brand name) than the other three.
 
 ### Directory layouts
@@ -150,7 +150,7 @@ Files are then grouped by namespace, so `en/common.json` is only ever compared a
 `de/common.json`, never against `de/footer.json`. Every namespace needs a file for the
 base locale; translint says which one is missing it if not. A locale that lacks a whole
 namespace file (`de/` has `common.json` but no `footer.json`) is reported against the
-path the file should have, with every key in it missing. `--fix` won't create that file
+path the file should have, with every key in it missing. `--fix` will not create that file
 for you, so copy the base file to start it. Nested namespace directories
 (`en/admin/billing.json`) work too - the namespace is the whole path below the language
 directory.
@@ -168,7 +168,7 @@ empty:
   correctly key-for-key.
 - **gettext .po / .pot** - `msgid`/`msgstr` pairs, multi-line strings, and plural forms
   (`msgstr[0]` is compared against `msgid` the same way a singular translation would be;
-  `msgstr[1..]` are the plural variants and aren't diffed against the singular `msgid`).
+  `msgstr[1..]` are the plural variants and are not diffed against the singular `msgid`).
   No `polib` dependency - it's plain text parsing plus `json.loads` for unescaping the
   quoted string literals, since `.po`'s C-style escaping is a subset of JSON's.
 - **Java .properties** - `key=value` or `key:value`, comments (`#`/`!`), and backslash
@@ -178,11 +178,11 @@ empty:
   with `en:`), so when a file's only top-level key is its own locale, translint reads
   what's under it and `en.yml`'s `en.title` lines up with `de.yml`'s `de.title`. Rails
   also splits locales into files like `devise.en.yml`; those are compared against
-  `devise.de.yml` rather than `en.yml`. This is the one format that isn't zero-dependency:
+  `devise.de.yml` rather than `en.yml`. This is the one format that is not zero-dependency:
   reading a YAML file needs PyYAML, installed with `pip install translint[yaml]`. Every
   other format still needs nothing, and translint only imports `yaml` the moment it
-  actually opens a `.yml`/`.yaml` file, so leaving the extra out doesn't cost anything
-  until you point translint at one. `--fix` doesn't write YAML back yet - missing keys
+  actually opens a `.yml`/`.yaml` file, so leaving the extra out does not cost anything
+  until you point translint at one. `--fix` does not write YAML back yet - missing keys
   in a `.yml` file are reported like any other finding, just not auto-inserted.
 - **Flutter .arb** - JSON whose values are ICU messages. Keys starting with `@`
   (`@@locale`, and the `@hello` block describing `hello`) are metadata and stay out of
@@ -196,12 +196,12 @@ Locale files are read as UTF-8 (a byte-order mark is tolerated and preserved by 
 
 `java.util.Properties.load(InputStream)` is ISO-8859-1 by specification, and plenty of
 pre-Java-9 resource bundles are still written that way, so a `.properties` file that
-isn't valid UTF-8 is re-read as ISO-8859-1 and `--fix` writes it back in the same
+is not valid UTF-8 is re-read as ISO-8859-1 and `--fix` writes it back in the same
 encoding. translint prints a line to stderr naming the file when it does that; it never
 falls back quietly.
 
 `--encoding ENC` names the encoding yourself, for anything else. Where translint has to
-substitute U+FFFD for bytes it can't decode, it says so on stderr rather than reporting
+substitute U+FFFD for bytes it cannot decode, it says so on stderr rather than reporting
 on text it knows is mangled: two words that differ only in an accent both decode to
 U+FFFD, compare equal, and turn a correct translation into an "untranslated" finding.
 
@@ -224,9 +224,9 @@ a mismatch - comparing token sets alone would let that slip through:
 
 A typed argument counts as its plain argument, so `{amount, number, currency}` is the
 token `{amount}` and `{{- name}}` is `{{name}}`. Only ICU's own types (`number`, `date`,
-`time`, `spellout`, `ordinal`, `duration`) count, so `{a, b}` in ordinary text isn't read
+`time`, `spellout`, `ordinal`, `duration`) count, so `{a, b}` in ordinary text is not read
 as a placeholder. For an ICU `plural` or `select`, the argument name is the token and the
-text in each branch is prose to translate, so `one {fichier}` in French doesn't clash
+text in each branch is prose to translate, so `one {fichier}` in French does not clash
 with `one {file}` in English, while a placeholder inside a branch is still checked. It
 counts once per argument however many branches repeat it, since Arabic has six plural
 branches where English has two.
@@ -236,6 +236,11 @@ matched gets included in the comparison. A value with no placeholder syntax at a
 correctly matches another value with none - most short UI strings never had a placeholder
 to begin with, and that's not a bug.
 
+A placeholder mismatch is a hard failure with no allowlist, so a false one is the worst
+bug translint can have. If it flags a correct translation, please
+[open an issue](https://github.com/munzzyy/translint/issues) with the base string and the
+translated one.
+
 ## Plural keys
 
 i18next writes one key per plural form (`file_one`, `file_other`), and Rails nests them
@@ -244,7 +249,7 @@ language, not on the base file: Japanese only has `other`, Russian has `one`, `f
 `many` and `other`, Arabic has all six. translint looks the locale's language up in
 CLDR's plural rules (the language part of the name, so `pt-BR` counts as Portuguese) and
 expects exactly those forms. A Japanese file without `file_one` is complete, a Russian
-`file_few` isn't an extra key, and a Russian file without one is missing it.
+`file_few` is not an extra key, and a Russian file without one is missing it.
 
 Two kinds of form get some slack. `zero` is never extra, because i18next and Rails both
 use it for a count of 0 in any language. It is only required in the languages whose CLDR
@@ -260,7 +265,7 @@ can be left out of `zero`, `one` and `two` ("One file") and added to any form, b
 exactly one token, that token is the count, so a Rails app passing the number as
 `%{friendly_count}` works too. A lone `_other` key only starts a plural set when it has a
 sibling form or a `{{count}}` in it, so `gender_other` next to `gender_male` stays an
-ordinary key. A locale whose language translint doesn't know, and i18next ordinal keys
+ordinary key. A locale whose language translint does not know, and i18next ordinal keys
 (`_ordinal_one`), get the plain key-by-key comparison.
 
 ## Config
@@ -281,7 +286,7 @@ files for anything that should persist:
 - `do_not_translate` - substrings stripped from both the base and translated value before
   the untranslated check compares them. Use this for a token that shows up inside
   otherwise-real prose across many keys (a product name, a unit symbol) so a string that's
-  genuinely translated except for that one repeated token doesn't false-positive.
+  genuinely translated except for that one repeated token does not false-positive.
 
 Both are also available as repeatable flags (`--allow-identical KEY`,
 `--do-not-translate TOKEN`) if you'd rather not commit a config file. translint looks for
@@ -290,21 +295,21 @@ one or with a glob, in the directory they share. Pass `--config PATH` to use a s
 file instead.
 
 Both values have to be lists of strings, and anything else stops the run with exit 2. A
-key translint doesn't know gets a warning on stderr, since a typo like `allow-identical`
+key translint does not know gets a warning on stderr, since a typo like `allow-identical`
 would otherwise turn your allowlist off without a word.
 
 ## `--json` output
 
 One object per non-base locale, in a list. These ten keys are the whole contract, and
-they don't change without a version bump:
+they do not change without a version bump:
 
 | key | what's in it |
 | --- | --- |
 | `locale` | the locale name (`de`) |
 | `path` | the file this result is about |
 | `format` | `json`, `po`, `properties`, `yaml`, or `arb` |
-| `missing_keys` | keys in the base that this file hasn't got |
-| `extra_keys` | keys here that the base hasn't got |
+| `missing_keys` | keys in the base that this file is missing |
+| `extra_keys` | keys here that the base does not have |
 | `placeholder_mismatches` | objects of `{key, base, locale}`, the token lists that differ |
 | `empty_values` | keys whose value is blank |
 | `untranslated_values` | keys whose value still matches the base (the heuristic) |
@@ -314,7 +319,7 @@ they don't change without a version bump:
 `ok` is true when the locale has no `missing_keys`, `placeholder_mismatches`,
 `empty_values` or `untranslated_markers`. It ignores `extra_keys` and
 `untranslated_values` on purpose, which means **`ok` can be true in a run that exits 1**:
-under `--strict` those two fail the run and `ok` doesn't know about `--strict`. If you're
+under `--strict` those two fail the run and `ok` does not know about `--strict`. If you're
 scripting against the output, take the exit code as the verdict and use `ok` for what it
 says on the tin, or check the two soft lists yourself.
 
@@ -328,11 +333,11 @@ This one's a **heuristic**, not a hard rule, and the CLI output says so. transli
 placeholders, punctuation, numbers, and any configured `do_not_translate` tokens from both
 the base and the translated value, then flags the key if what's left is identical - and
 only if the base's remaining content has at least 3 letters, so a value that's just a unit
-symbol or a bare number doesn't flag in every locale it's legitimately identical in
-(`"kg"` staying `"kg"` in French isn't a missed translation).
+symbol or a bare number does not flag in every locale it's legitimately identical in
+(`"kg"` staying `"kg"` in French is not a missed translation).
 
 A hit means "this looks untranslated," not "this is definitely wrong." Brand names,
-loanwords, and real cross-language cognates all trip it correctly and aren't bugs - that's
+loanwords, and real cross-language cognates all trip it correctly and are not bugs - that's
 what `--allow-identical` and `--do-not-translate` are for. Silence a hit that way, not by
 ignoring the finding, so the check stays useful for the next change instead of turning
 into noise you've trained yourself to skim past.
@@ -342,7 +347,7 @@ into noise you've trained yourself to skim past.
 `--fix` does exactly one thing: it inserts keys that are **completely missing** from a
 locale file - present in the base, absent here entirely - and nothing else. Every other
 finding (extra keys, placeholder mismatches, empty values, untranslated-value hits) stays
-report-only, exactly like it does without `--fix`. Default behavior doesn't change; you
+report-only, exactly like it does without `--fix`. Default behavior does not change; you
 have to opt in.
 
 ```bash
@@ -356,7 +361,7 @@ to charge {amount}`:
 - **JSON / .properties** get the literal English base text back, prefixed with an
   unmissable `[UNTRANSLATED]` tag: `"checkout.confirm": "[UNTRANSLATED] You're about to
   charge {amount}"`. The placeholder comes along for the ride, so the string still has the
-  right tokens once someone translates it - it just isn't translated yet, and says so.
+  right tokens once someone translates it - it just is not translated yet, and says so.
 - **.po** gets a new entry marked with gettext's own `fuzzy` flag instead of a text tag:
 
   ```
@@ -365,25 +370,25 @@ to charge {amount}`:
   msgstr "You're about to charge {amount}"
   ```
 
-  translint's own `.po` parser already skips fuzzy entries as not-live (`msgfmt` doesn't
+  translint's own `.po` parser already skips fuzzy entries as not-live (`msgfmt` does not
   compile them either), so a fuzzy-flagged key you just inserted reads back as **still
   missing** on the very next run, the same way `[UNTRANSLATED]` does for the other two
-  formats. There's no way for a fuzzy entry to be mistaken for a finished translation by
+  formats. There is no way for a fuzzy entry to be mistaken for a finished translation by
   translint or by `msgfmt`.
 
   A key that reads as missing because its entry is fuzzy or obsolete (`#~`) is still in
   the file, though, and a second `msgid` makes `msgfmt` refuse the whole file. `--fix`
   leaves those alone and names them on stderr, which is also why a second `--fix` run
-  doesn't add the same entry again.
+  does not add the same entry again.
 
 What it will never do, on purpose:
 
-- **Never write a real translation.** There's no translation engine here, and there's
+- **Never write a real translation.** There is no translation engine here, and there is
   never going to be one - see [CONTRIBUTING.md](CONTRIBUTING.md). If it's not in the base
-  file already, `--fix` doesn't invent it.
+  file already, `--fix` does not invent it.
 - **Never touch the identical-to-base heuristic.** A key that already exists but is flagged
-  `untranslated_values` stays exactly as it is, forever. `--fix` only adds keys that don't
-  exist at all; it doesn't second-guess a value that's already there, correct guess or not.
+  `untranslated_values` stays exactly as it is, forever. `--fix` only adds keys that do not
+  exist at all; it does not second-guess a value that's already there, correct guess or not.
 - **Never rewrite an existing translation**, even a broken one. A placeholder mismatch or an
   empty value on a key that already exists is left alone, byte for byte - only a genuinely
   absent key gets written.
@@ -399,7 +404,7 @@ is inserted into the `nav` object, creating any intermediate objects it needs; i
 dot-namespaced file it's written as a top-level `"nav.settings"` member. translint reads
 both the same way (see [Formats](#formats)), but i18next, vue-i18n and the rest walk into
 the nested object for `t("nav.settings")` and never see a literal top-level key with a dot
-in it, so writing the wrong shape would hand you a string the app still can't find. An
+in it, so writing the wrong shape would hand you a string the app still cannot find. An
 empty locale file has no shape of its own, so it follows the base file's.
 
 `--dry-run` only makes sense alongside `--fix`; it prints the same summary but writes
@@ -417,8 +422,8 @@ repos:
 ```
 
 `main` rather than a tag on purpose: the newest tag, `v0.4.0`, predates `--fix`, the
-MIT relicense, and the later move to GPL-3.0-or-later, so it isn't the thing you want.
-Pin to a tag once there's a newer one.
+MIT relicense, and the later move to GPL-3.0-or-later, so it is not the thing you want.
+Pin to a tag once there is a newer one.
 
 The hook always passes the full path you configure in `args`, not just the files that
 changed in that commit (`pass_filenames: false`) - missing-key detection needs to see
@@ -451,20 +456,20 @@ on the runner first so `.yml`/`.yaml` files can be read.
 
 ## What it does NOT do
 
-- **YAML needs an extra, and `--fix` doesn't write it.** Reading `.yml`/`.yaml` files
+- **YAML needs an extra, and `--fix` does not write it.** Reading `.yml`/`.yaml` files
   takes PyYAML (`pip install translint[yaml]`), the one dependency translint has, and
   it's optional: nothing imports it until a YAML file is opened. `--fix` reports a
-  missing key in a YAML file but won't insert it, because writing YAML back without
+  missing key in a YAML file but will not insert it, because writing YAML back without
   reformatting the rest of the file needs more than PyYAML gives you.
 - **The untranslated-value check is a heuristic**, covered honestly above. It flags what
-  looks untranslated; it doesn't prove anything, and legitimate identical values need an
+  looks untranslated; it does not prove anything, and legitimate identical values need an
   allowlist entry, same as any linter's suppression comment.
-- **It doesn't translate anything.** translint tells you what's missing or broken. Writing
+- **It does not translate anything.** translint tells you what's missing or broken. Writing
   the actual translation is still your job (or your translator's, or your agent's, but
-  translint isn't going to guess at one). `--fix` (see [Fix mode](#fix-mode)) can insert a
+  translint is not going to guess at one). `--fix` (see [Fix mode](#fix-mode)) can insert a
   loudly-marked placeholder for a key that's missing entirely, but it never writes real
   translated text - that's a hard line, not a version-1 limitation.
-- **It doesn't validate translation quality.** A translation that's grammatically wrong,
+- **It does not validate translation quality.** A translation that's grammatically wrong,
   culturally off, or just bad prose passes every check here as long as the keys, tokens,
   and non-empty-ness line up. That's a different problem than the one this tool solves.
 - **Directory scans are flat unless you ask.** Pointing translint at a directory checks

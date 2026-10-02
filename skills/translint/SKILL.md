@@ -7,7 +7,7 @@ description: Check locale/i18n files for missing keys, extra keys, placeholder/i
 
 Run this after touching anything under a locale directory - a new key added to the base
 file, a translation edited, a new locale added - and before handing the change back as
-finished. It won't translate anything for you or guess at a fix; it tells you exactly
+finished. It will not translate anything for you or guess at a fix; it tells you exactly
 which key, in which locale, is broken and why.
 
 ## When to use it
@@ -30,8 +30,8 @@ Point `paths` at the directory holding the locale files (or list specific files)
 `--base` at the locale name (the filename stem, e.g. `en` for `en.json`) that's the
 reference every other locale gets checked against. Format is auto-detected from the
 extension (`.json`, `.po`/`.pot`, `.properties`, `.yml`/`.yaml`, Flutter's `.arb`); pass
-`--format` to force one. YAML needs PyYAML (`pip install translint[yaml]`); without it a `.yml` file exits 2
-with a message saying so.
+`--format` to force one. YAML needs PyYAML (`pip install translint[yaml]`); without it a
+`.yml` file exits 2 with a message saying so.
 
 No `--json`? You get the same information as a grouped human-readable report instead,
 which is easier to skim but not something to parse.
@@ -39,7 +39,7 @@ which is easier to skim but not something to parse.
 ## Reading the result
 
 Exit code is 0 when every locale is clean, 1 when translint found something to fix, 2 if
-a path couldn't be read or parsed at all (bad JSON, unrecognized extension) - so a real
+a path could not be read or parsed at all (bad JSON, unrecognized extension) - so a real
 parse failure and a lint finding never look the same.
 
 With `--json`, you get a list with one result object per non-base locale file, even when
@@ -53,7 +53,7 @@ only one was checked. Each result has:
 - `extra_keys` - present here, not in the base. Probably a stale key from a rename;
   confirm before deleting, since the base might just be missing it instead.
 - `placeholder_mismatches` - the interpolation tokens (`{name}`, `{{name}}`, `%s`,
-  `%(name)s`, `${name}`) in the base value and the translated value don't match as a set.
+  `%(name)s`, `${name}`) in the base value and the translated value do not match as a set.
   This is the one that actually crashes at runtime - a dropped or renamed placeholder
   throws a `KeyError`/`IndexError`/`undefined` the first time that string renders with
   real data. Each entry shows `base` and `locale` token lists so you can see exactly what
@@ -63,27 +63,27 @@ only one was checked. Each result has:
   placeholders, punctuation, and any configured do-not-translate tokens. This is a
   **heuristic**, not proof - some strings (brand names, unit symbols, genuine
   cross-language cognates) are supposed to render the same in every locale. If a hit is
-  legitimate, don't just leave it: either it's a project-wide token (add it to
+  legitimate, do not just leave it: either it's a project-wide token (add it to
   `--do-not-translate`) or a specific key (add it to `--allow-identical`), so the next run
-  doesn't flag it again for the same reason.
+  does not flag it again for the same reason.
 - `untranslated_markers` - a value still carrying the `[UNTRANSLATED]` marker `--fix`
   writes. Always a failure: it means a key was inserted and never translated.
 - `locale`, `path`, `format` - which file this result is about.
 - `ok` - **hard findings only.** True when this locale has no `missing_keys`,
   `placeholder_mismatches`, `empty_values` or `untranslated_markers`. It deliberately
   ignores `extra_keys` and `untranslated_values`, so under `--strict` a result can be
-  `"ok": true` in a run that exits 1. Don't read `ok` as "this run passed" - use the exit
+  `"ok": true` in a run that exits 1. Do not read `ok` as "this run passed" - use the exit
   code for that, or check the two soft lists yourself.
 
 `--strict` also fails the exit code on `extra_keys` and `untranslated_values` (both are
 much more likely to have a legitimate reason than `missing_keys`/mismatches/empty values,
-so they don't fail by default). Use it in CI once a project's locale files are clean and
+so they do not fail by default). Use it in CI once a project's locale files are clean and
 you want to keep them that way.
 
 ## The rule
 
-translint flags what's broken, it doesn't guess at a translation. When it reports a missing
-key, add the real translation - don't invent a placeholder-value pair that merely makes the
+translint flags what's broken, it does not guess at a translation. When it reports a missing
+key, add the real translation - do not invent a placeholder-value pair that merely makes the
 check pass. When it reports a placeholder mismatch, look at what the base string actually
 interpolates and fix the translation to match, not the other way around (the base is the
 source of truth). When it reports something you're confident is a false positive on the
