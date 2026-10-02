@@ -56,6 +56,11 @@ Fixed in 0.5.0:
   back as an extra key and its `{{count}}` as a placeholder mismatch, a
   Russian file missing `file_few` passed, and `--fix` stubbed a `file_one`
   into `ja.json`. Rails-style nested `one:`/`other:` sets get the same rules.
+- Typed arguments are placeholders now: ICU and Java `MessageFormat`
+  `{amount, number, currency}` and `{0,number,integer}`, plus i18next's
+  `{{val, number}}` and `{{- name}}`. They used to produce no token at all, so
+  a translation that dropped one passed. A value that is only `{{ name }}`
+  (with spaces) is no longer called possibly untranslated.
 - `--fix` works out every write before it makes any. A run that stopped with
   exit 2 on a later namespace (a file that won't decode, a YAML file) could
   already have rewritten the files that came before it.

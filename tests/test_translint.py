@@ -2164,3 +2164,61 @@ def test_plural_table_matches_node_intl_pluralrules():
         required, allowed = translint.PLURAL_TABLE[lang]
         assert allowed == set(cats) | {"zero"}, lang
         assert required == {c for c in cats if c in used or c == "other"}, lang
+
+
+# ---------------------------------------------------------------------------
+# Typed arguments: ICU/Java {x, number}, i18next {{x, format}} and {{- x}}
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("value,tokens", [
+    ("Total: {amount, number, currency}", ("{amount}",)),
+    ("Due {d, date, short}", ("{d}",)),
+    ("At {t, time}", ("{t}",)),
+    ("{0,number,integer} files", ("{0}",)),
+    ("Hi {0}, you have {1,number} new", ("{0}", "{1}")),
+    ("{n, number, ::currency/EUR}", ("{n}",)),
+    ("{0,number,#,##0.00}", ("{0}",)),
+    ("Price: {{val, number}}", ("{{val}}",)),
+    ("{{count, currency(USD)}} total", ("{{count}}",)),
+    ("On {{date, datetime}}", ("{{date}}",)),
+    ("Hi {{- name}}", ("{{name}}",)),
+    ("{{name, uppercase}}", ("{{name}}",)),
+])
+def test_typed_arguments_extract_their_argument(value, tokens):
+    assert translint.extract_placeholders(value)[1] == tokens
+
+
+@pytest.mark.parametrize("value", ["{a, b}", "Pick {x, numbers}", "{one, two, three}"])
+def test_brace_prose_with_commas_is_not_a_typed_argument(value):
+    assert translint.extract_placeholders(value) == ("none", ())
+
+
+@pytest.mark.parametrize("base_val,good,bad", [
+    ("Total: {amount, number, currency}", "Gesamt: {amount, number, currency}", "Gesamt: "),
+    ("Total: {amount, number, currency}", "Gesamt: {amount}", "Gesamt: {sum, number, currency}"),
+    ("{0,number,integer} files", "{0,number,integer} Dateien", "Dateien"),
+    ("Price: {{val, number}}", "Preis: {{val, number}}", "Preis: "),
+    ("Price: {{val, number}}", "Preis: {{val, number(minimumFractionDigits: 2)}}",
+     "Preis: {{value, number}}"),
+    ("Hi {{- name}}", "Hallo {{name}}", "Hallo"),
+])
+def test_typed_arguments_dropped_or_renamed_are_mismatches(base_val, good, bad):
+    base = {"k": base_val}
+    r = translint.check_locale(base, {"k": good}, "de", "de.json", "json")
+    assert r["placeholder_mismatches"] == []
+    r = translint.check_locale(base, {"k": bad}, "de", "de.json", "json")
+    assert len(r["placeholder_mismatches"]) == 1
+
+
+def test_untranslated_strip_agrees_with_the_spaced_doublebrace_extractor():
+    r = translint.check_locale({"a": "{{ name }}"}, {"a": "{{ name }}"}, "de", "p", "json")
+    assert r["untranslated_values"] == []
+
+
+@pytest.mark.parametrize("value", [
+    "{{ name }}", "{{val, number}}", "{{- name}}", "{amount, number, currency}",
+    "{0,number,integer}",
+])
+def test_untranslated_strip_removes_every_typed_form(value):
+    assert translint._strip_for_untranslated_check(value, []) == ""

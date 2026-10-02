@@ -195,17 +195,27 @@ U+FFFD, compare equal, and turn a correct translation into an "untranslated" fin
 
 ## Placeholder styles
 
-translint detects five interpolation styles and diffs the tokens as a multiset. A
+translint detects these interpolation styles and diffs the tokens as a multiset. A
 translation that uses a placeholder twice when the base only uses it once still counts as
 a mismatch - comparing token sets alone would let that slip through:
 
 | Style | Example | Common in |
 |---|---|---|
 | `{name}` | `Hello {name}` | ICU, i18next, Python `str.format` |
+| `{name, number}` / `{0,date,short}` | `Total: {amount, number, currency}` | ICU (FormatJS, Flutter ARB), Java `MessageFormat` |
+| `{name, plural, ...}` / `{name, select, ...}` | `{count, plural, one {# file} other {# files}}` | ICU |
 | `{{name}}` | `Hello {{name}}` | Handlebars, Vue, Mustache |
+| `{{name, format}}` / `{{- name}}` | `Price: {{val, number}}` | i18next formatting and unescaped output |
 | `%s` / `%d` / `%1$s` | `Hello %s` | printf, gettext, Java positional |
 | `%(name)s` | `Hello %(name)s` | Python `%`-format |
 | `${name}` / `$name` | `Hello ${name}` | shell, template literals |
+
+A typed argument counts as its plain argument, so `{amount, number, currency}` is the
+token `{amount}` and `{{- name}}` is `{{name}}`. Only ICU's own types (`number`, `date`,
+`time`, `spellout`, `ordinal`, `duration`) count, so `{a, b}` in ordinary text isn't read
+as a placeholder. For an ICU `plural` or `select`, the argument name is the token and the
+text in each branch is prose to translate, so `one {fichier}` in French doesn't clash
+with `one {file}` in English, while a placeholder inside a branch is still checked.
 
 A value can mix styles (rare, but not invalid) and every token from every style that
 matched gets included in the comparison. A value with no placeholder syntax at all

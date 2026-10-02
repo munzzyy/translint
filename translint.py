@@ -90,7 +90,11 @@ EXT_TO_FORMAT = {
 # is why doublebrace/dollar run before brace, and printf runs before dollar.
 # ---------------------------------------------------------------------------
 
-_RX_DOUBLEBRACE = re.compile(r"\{\{\s*([\w.]+)\s*\}\}")
+# i18next also allows a format after a comma ({{val, number}},
+# {{price, currency(USD)}}) and a "-" for unescaped output ({{- name}}).
+# Both are the same {{name}} argument as far as the caller is concerned.
+_DOUBLEBRACE_RE = r"\{\{\s*-?\s*([\w.]+)\s*(?:,[^{}]*)?\}\}"
+_RX_DOUBLEBRACE = re.compile(_DOUBLEBRACE_RE)
 _RX_BRACE = re.compile(r"\{([A-Za-z_][\w.]*|\d*)\}")
 # Python %(name)s mapping keys, with the full flag/width/precision grammar a
 # real format string uses (%(price).2f, %(done)3d), so a conversion isn't
@@ -146,6 +150,13 @@ def _spans_contain(spans, m):
 # ---------------------------------------------------------------------------
 
 _RX_ICU_HEAD = re.compile(r"^\s*([A-Za-z_]\w*)\s*,\s*(?:plural|selectordinal|select)\s*,")
+
+# A typed argument, {amount, number, currency} or Java's {0,number,integer},
+# is the argument {amount} / {0} with formatting attached. Only ICU's own
+# types count, so "{a, b}" in prose stays prose.
+_ICU_TYPED_RE = (r"\{\s*([A-Za-z_]\w*|\d+)\s*,\s*"
+                 r"(?:number|date|time|spellout|ordinal|duration)\s*(?:,[^{}]*)?\}")
+_RX_ICU_TYPED = re.compile(_ICU_TYPED_RE)
 
 
 def _match_brace(s, i):
@@ -259,6 +270,16 @@ def extract_placeholders(value):
     if doublebrace_matches:
         tokens += [f"{{{{{m.group(1)}}}}}" for m in doublebrace_matches]
         styles_hit.append("doublebrace")
+
+    # After doublebrace, so {{val, number}} isn't also read as {val, number}.
+    typed_matches = [m for m in _RX_ICU_TYPED.finditer(value)
+                     if not _spans_contain(icu_spans, m)
+                     and not _spans_contain([d.span() for d in doublebrace_matches], m)]
+    if typed_matches:
+        tokens += [f"{{{m.group(1)}}}" for m in typed_matches]
+        if "icu" not in styles_hit:
+            styles_hit.append("icu")
+        icu_spans = icu_spans + [m.span() for m in typed_matches]
 
     pynamed_matches = [m for m in _RX_PYNAMED.finditer(value)
                         if not _spans_contain(icu_spans, m)]
@@ -691,7 +712,8 @@ def load_locale(path, fmt=None, encoding=None):
 # stripped the other way here, and the untranslated heuristic disagreed with
 # the placeholder check on the same value.
 _STRIP_PLACEHOLDER_RX = re.compile(
-    r"\{\{[\w.]+\}\}|\{[\w.]*\}|%\(\w+\)[-+0# ]*\d*(?:\.\d+)?[diouxXeEfFgGcrsa]|"
+    _DOUBLEBRACE_RE + r"|" + _ICU_TYPED_RE + r"|"
+    r"\{[\w.]*\}|%\(\w+\)[-+0# ]*\d*(?:\.\d+)?[diouxXeEfFgGcrsa]|"
     + _PRINTF_RE + r"|"
     r"\$\{[\w]+\}|\$[A-Za-z_]\w*"
 )
