@@ -171,7 +171,11 @@ empty:
 - **Java .properties** - `key=value` or `key:value`, comments (`#`/`!`), and backslash
   line continuations.
 - **YAML** (`.yml` / `.yaml`) - the default Rails i18n layout (`config/locales/en.yml`)
-  and common in Vue/Nuxt projects. This is the one format that isn't zero-dependency:
+  and common in Vue/Nuxt projects. Rails wraps each file in its locale (`en.yml` starts
+  with `en:`), so when a file's only top-level key is its own locale, translint reads
+  what's under it and `en.yml`'s `en.title` lines up with `de.yml`'s `de.title`. Rails
+  also splits locales into files like `devise.en.yml`; those are compared against
+  `devise.de.yml` rather than `en.yml`. This is the one format that isn't zero-dependency:
   reading a YAML file needs PyYAML, installed with `pip install translint[yaml]`. Every
   other format still needs nothing, and translint only imports `yaml` the moment it
   actually opens a `.yml`/`.yaml` file, so leaving the extra out doesn't cost anything

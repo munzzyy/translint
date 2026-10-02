@@ -73,6 +73,9 @@ Added in 0.5.0:
   `yaml` is only imported the moment a YAML file is actually loaded, so
   every other format still needs nothing. `--fix` doesn't write YAML back
   yet; missing keys in a `.yml` file are reported like any other finding.
+  The `en:` root every Rails file starts with is read through when it names
+  the file's own locale (`no:` for Norwegian too, which YAML reads as
+  false), and `devise.de.yml` is compared against `devise.en.yml`.
 
 Carried over from the never-released v0.4.0 notes:
 

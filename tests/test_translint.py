@@ -2222,3 +2222,79 @@ def test_untranslated_strip_agrees_with_the_spaced_doublebrace_extractor():
 ])
 def test_untranslated_strip_removes_every_typed_form(value):
     assert translint._strip_for_untranslated_check(value, []) == ""
+
+
+# ---------------------------------------------------------------------------
+# YAML: the Rails layout wraps every file in its locale (en.yml has "en:")
+# ---------------------------------------------------------------------------
+
+
+@requires_yaml
+def test_yaml_rails_root_locale_key_is_unwrapped():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {"en.yml": "en:\n  a: Apple\n  b: Hello %{name}\n",
+                       "de.yml": "de:\n  a: Apfel\n"})
+        code, out = run_cli([d, "--base", "en", "--json"])
+        assert code == 1
+        r = json.loads(out)[0]
+        assert r["missing_keys"] == ["b"]
+        assert r["extra_keys"] == []
+        write_tree(d, {"de.yml": "de:\n  a: Apfel\n  b: Hallo %{name}\n"})
+        code, out = run_cli([d, "--base", "en", "--strict"])
+        assert code == 0, out
+
+
+@requires_yaml
+def test_yaml_lone_root_that_is_not_the_locale_stays():
+    assert translint.parse_yaml("app:\n  title: Hi\n", "en.yml") == {"app.title": "Hi"}
+    assert translint.parse_yaml("en: Hello\n", "en.yml") == {"en": "Hello"}
+
+
+@requires_yaml
+def test_yaml_norwegian_no_root_unwraps_even_though_yaml_reads_it_as_false():
+    assert translint.parse_yaml("no:\n  a: Ja\n", "no.yml") == {"a": "Ja"}
+
+
+@requires_yaml
+def test_yaml_anchors_and_merge_keys_still_load():
+    text = ("en:\n  defaults: &defaults\n    save: Save\n    cancel: Cancel\n"
+            "  form:\n    <<: *defaults\n    title: Edit\n")
+    assert translint.parse_yaml(text, "en.yml") == {
+        "defaults.save": "Save", "defaults.cancel": "Cancel",
+        "form.save": "Save", "form.cancel": "Cancel", "form.title": "Edit",
+    }
+
+
+@requires_yaml
+def test_yaml_root_from_the_directory_in_the_dir_layout():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {"en/models.yml": "en:\n  user: User\n  post: Post\n",
+                       "de/models.yml": "de:\n  user: Benutzer\n"})
+        code, out = run_cli([d, "--recursive", "--locale-from", "dir", "--json"])
+        assert json.loads(out)[0]["missing_keys"] == ["post"]
+
+
+@requires_yaml
+def test_yaml_devise_style_files_are_grouped_by_their_prefix():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {
+            "en.yml": "en:\n  hello: Hello\n",
+            "de.yml": "de:\n  hello: Hallo\n",
+            "devise.en.yml": "en:\n  devise:\n    locked: Locked.\n    timeout: Expired.\n",
+            "devise.de.yml": "de:\n  devise:\n    locked: Gesperrt.\n",
+        })
+        code, out = run_cli([d, "--base", "en", "--json"])
+        assert code == 1
+        by_path = {os.path.basename(r["path"]): r for r in json.loads(out)}
+        assert by_path["de.yml"]["missing_keys"] == []
+        assert by_path["devise.de.yml"]["locale"] == "de"
+        assert by_path["devise.de.yml"]["missing_keys"] == ["devise.timeout"]
+
+
+@requires_yaml
+def test_yaml_rails_plural_set_under_the_locale_root():
+    with tempfile.TemporaryDirectory() as d:
+        write_tree(d, {"en.yml": "en:\n  files:\n    one: One file\n    other: '%{count} files'\n",
+                       "ja.yml": "ja:\n  files:\n    other: '%{count} 個のファイル'\n"})
+        code, out = run_cli([d, "--base", "en", "--strict"])
+        assert code == 0, out

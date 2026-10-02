@@ -423,7 +423,28 @@ def parse_yaml(text, path):
         data = {}
     if not isinstance(data, dict):
         raise ValueError(f"{path}: top level must be a YAML mapping")
+    if len(data) == 1:
+        root, inner = next(iter(data.items()))
+        if _yaml_root_is_locale(root, path) and isinstance(inner, (dict, type(None))):
+            data = inner or {}
     return flatten_json(data)
+
+
+# PyYAML reads YAML 1.1 booleans, so Norwegian's "no:" root arrives as False.
+_YAML_BOOL_SPELLINGS = {True: ("yes", "on", "true"), False: ("no", "off", "false")}
+
+
+def _yaml_root_is_locale(root, path):
+    """Whether a lone top-level key is the file's locale, the way every
+    Rails locale file wraps its keys (en.yml starts with "en:"). The locale
+    is the file stem, the last dotted part of it (devise.en.yml), or the
+    directory the file sits in (config/locales/en/models.yml)."""
+    stem = os.path.splitext(os.path.basename(path))[0]
+    names = {stem.lower(), stem.rsplit(".", 1)[-1].lower(),
+             os.path.basename(os.path.dirname(os.path.abspath(path))).lower()}
+    if isinstance(root, bool):
+        return any(n in _YAML_BOOL_SPELLINGS[root] for n in names)
+    return isinstance(root, str) and root.lower() in names
 
 
 def _properties_line_continues(line):
@@ -1066,12 +1087,15 @@ def locale_name_from_path(path):
     return os.path.splitext(os.path.basename(path))[0]
 
 
-def locale_and_namespace(path, root, locale_from="stem"):
+def locale_and_namespace(path, root, locale_from="stem", fmt=None):
     """Split a discovered file into (locale, namespace).
 
     With locale_from="stem" the locale is the filename stem, the way
     en.json / de.json directories work, and every file is in one unnamed
-    namespace so they all get compared against one base.
+    namespace so they all get compared against one base. A YAML stem with
+    a dot in it is Rails' devise.en.yml convention: the locale is the last
+    part and the rest is the namespace, so devise.de.yml is compared
+    against devise.en.yml rather than against en.yml.
 
     With locale_from="dir" the locale is the first directory below the
     scanned root - the next-i18next / i18next-fs-backend layout,
@@ -1080,7 +1104,12 @@ def locale_and_namespace(path, root, locale_from="stem"):
     keeps en/common.json compared against de/common.json and never against
     de/footer.json."""
     if locale_from != "dir":
-        return locale_name_from_path(path), ""
+        stem = locale_name_from_path(path)
+        if "." in stem and (fmt or detect_format(path)) == "yaml":
+            rel = os.path.splitext(os.path.relpath(path, root))[0]
+            namespace, locale = rel.replace(os.sep, "/").rsplit(".", 1)
+            return locale, namespace
+        return stem, ""
     rel = os.path.relpath(path, root)
     parts = rel.split(os.sep)
     if len(parts) < 2:
@@ -1875,7 +1904,7 @@ def main(argv=None):
     # de/common.json.
     by_namespace = {}
     for path, root in entries:
-        locale, namespace = locale_and_namespace(path, root, args.locale_from)
+        locale, namespace = locale_and_namespace(path, root, args.locale_from, args.format)
         by_namespace.setdefault(namespace, []).append((locale, path))
 
     groups = []
